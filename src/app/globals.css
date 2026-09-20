@@ -1,0 +1,332 @@
+@import "@fontsource-variable/dm-sans";
+@import "@fontsource-variable/manrope";
+:root {
+  color-scheme: dark;
+  font-family: "DM Sans Variable", sans-serif;
+  background: #233b43;
+  color: #f0ede3;
+}
+* {
+  box-sizing: border-box;
+}
+html,
+body {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+button {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+button:focus-visible {
+  outline: 1px solid #f0d6a0;
+  outline-offset: 8px;
+}
+.experience,
+.world {
+  position: fixed;
+  inset: 0;
+}
+.world {
+  touch-action: none;
+}
+.film {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(
+    ellipse at 50% 45%,
+    transparent 35%,
+    #0b20282b 100%
+  );
+}
+.overlay {
+  position: fixed;
+  inset: 0;
+  background:
+    linear-gradient(90deg, #0e242e78, transparent 75%),
+    linear-gradient(0deg, #081d2ae0, #15272b10 70%);
+  animation: appear 1.2s ease both;
+}
+.edition {
+  position: absolute;
+  top: 44px;
+  left: 56px;
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 3px;
+}
+.mark {
+  width: 13px;
+  height: 13px;
+  border: 1px solid #d2bd91;
+  transform: rotate(-15deg);
+  box-shadow: 4px -4px 0 -1px #6c8584;
+}
+.edition-detail {
+  margin-left: 26px;
+  font-size: 9px;
+  color: #c3cfc6aa;
+  letter-spacing: 2px;
+}
+.intro {
+  position: absolute;
+  left: 7%;
+  bottom: 22%;
+}
+.eyebrow {
+  font-size: 9px;
+  letter-spacing: 3px;
+  color: #d7c499;
+  margin: 0 0 24px;
+}
+h1 {
+  font-family: "Manrope Variable", sans-serif;
+  font-size: clamp(48px, 6.7vw, 110px);
+  font-weight: 300;
+  line-height: 1.06;
+  letter-spacing: -0.065em;
+  margin: 0;
+}
+.description {
+  font-size: 13px;
+  color: #d3dbd8aa;
+  margin-top: 28px;
+  letter-spacing: 0.2px;
+}
+.entry {
+  position: absolute;
+  right: 7%;
+  bottom: 23%;
+  width: 330px;
+}
+.enter {
+  display: flex;
+  width: 100%;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 0;
+  background: none;
+  border: 0;
+  border-bottom: 1px solid #b8c6c273;
+  font-size: 17px;
+  font-weight: 400;
+  text-align: left;
+  transition:
+    border-color 0.3s,
+    color 0.3s;
+}
+.enter:hover {
+  color: #f4d69f;
+  border-color: #f4d69f;
+}
+.enter span {
+  font-size: 25px;
+  font-weight: 300;
+}
+.controls {
+  margin-top: 20px;
+  font-size: 9px;
+  letter-spacing: 0.5px;
+  color: #dddcd0;
+  line-height: 2;
+}
+.controls span {
+  color: #a2b3b5;
+  margin-left: 4px;
+}
+.footer {
+  position: absolute;
+  bottom: 35px;
+  left: 56px;
+  right: 56px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 8px;
+  letter-spacing: 2px;
+  color: #9aafb1;
+}
+.settings {
+  display: flex;
+  gap: 20px;
+  margin-top: 26px;
+}
+.settings button {
+  padding: 0;
+  background: none;
+  border: none;
+  color: #b5c4c5;
+  font-size: 11px;
+}
+.pause {
+  position: fixed;
+  right: 24px;
+  top: 18px;
+  width: 44px;
+  height: 44px;
+  background: transparent;
+  border: 0;
+  opacity: 0.4;
+  font-size: 18px;
+}
+.pause:hover {
+  opacity: 1;
+}
+.hint {
+  position: fixed;
+  bottom: 32px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: 11px;
+  color: #f2f1e6bb;
+  letter-spacing: 0.4px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 1.5s;
+  text-shadow: 0 2px 8px #17303d;
+}
+.hint.visible {
+  opacity: 1;
+}
+.loading {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-size: 12px;
+  letter-spacing: 1px;
+}
+.loading span {
+  width: 8px;
+  height: 8px;
+  background: #cbb98f;
+  animation: breathe 2s infinite;
+}
+.error-copy {
+  font-size: 13px;
+  color: #d7dddd;
+  line-height: 1.8;
+}
+.touch-controls,
+.touch-copy {
+  display: none;
+}
+.noscript {
+  position: fixed;
+  inset: 35%;
+}
+@keyframes appear {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes breathe {
+  50% {
+    opacity: 0.25;
+    transform: rotate(90deg);
+  }
+}
+@media (max-width: 850px) {
+  .edition {
+    top: 28px;
+    left: 28px;
+  }
+  .edition-detail {
+    display: none;
+  }
+  .intro {
+    left: 7%;
+    bottom: 40%;
+  }
+  h1 {
+    font-size: clamp(52px, 10vw, 80px);
+  }
+  .entry {
+    left: 7%;
+    right: auto;
+    bottom: 16%;
+    width: min(330px, 86%);
+  }
+  .footer {
+    left: 7%;
+    right: 7%;
+    bottom: 22px;
+    font-size: 7px;
+  }
+  .footer span:last-child {
+    display: none;
+  }
+}
+@media (pointer: coarse) {
+  .desktop {
+    display: none;
+  }
+  .touch-copy {
+    display: block;
+  }
+  .touch-controls {
+    display: block;
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+  }
+  .touch-move {
+    position: absolute;
+    left: 24px;
+    bottom: 30px;
+    width: 130px;
+    height: 130px;
+    border: 1px solid #fff3;
+    border-radius: 50%;
+    pointer-events: auto;
+    touch-action: none;
+    display: grid;
+    place-items: center;
+  }
+  .touch-move span {
+    width: 38px;
+    height: 38px;
+    border: 1px solid #fff3;
+    background: #eee1;
+    border-radius: 50%;
+  }
+  .touch-look {
+    position: absolute;
+    right: 0;
+    top: 80px;
+    bottom: 0;
+    width: 52%;
+    pointer-events: auto;
+    touch-action: none;
+  }
+  .touch-jump {
+    position: absolute;
+    right: 30px;
+    bottom: 40px;
+    width: 58px;
+    height: 58px;
+    border: 1px solid #fff4;
+    border-radius: 50%;
+    background: #eee1;
+    pointer-events: auto;
+    touch-action: none;
+    font-size: 22px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}

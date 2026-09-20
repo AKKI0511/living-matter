@@ -1,0 +1,15 @@
+internal/
+node_modules/
+.next/
+next-env.d.ts
+out/
+dist/
+test-results/
+playwright-report/
+.env*
+!.env.example
+*.tsbuildinfo
+.DS_Store
+artifacts/
+.agents/skills/
+skills-lock.json

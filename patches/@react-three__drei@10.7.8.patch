@@ -1,0 +1,19 @@
+diff --git a/core/MeshReflectorMaterial.js b/core/MeshReflectorMaterial.js
+index c2d600cab76e10af4aca68749a3ba8d9572a8bf7..f4adb0d242f5eef2e21f1bca5e4466b1f43704f3 100644
+--- a/core/MeshReflectorMaterial.js
++++ b/core/MeshReflectorMaterial.js
+@@ -148,6 +148,14 @@ const MeshReflectorMaterial = /* @__PURE__ */React.forwardRef(({
+     };
+     return [fbo1, fbo2, blurpass, reflectorProps];
+   }, [gl, blurX, blurY, textureMatrix, resolution, mirror, hasBlur, mixBlur, mixStrength, minDepthThreshold, maxDepthThreshold, depthScale, depthToBlurRatioBias, distortion, distortionMap, mixContrast]);
++  React.useEffect(() => () => {
++    fbo1.dispose();
++    fbo2.dispose();
++    blurpass.renderTargetA.dispose();
++    blurpass.renderTargetB.dispose();
++    blurpass.convolutionMaterial.dispose();
++    blurpass.screen.geometry.dispose();
++  }, [fbo1, fbo2, blurpass]);
+   useFrame(() => {
+     var _materialRef$current2;
+     const parent = materialRef.current.parent || ((_materialRef$current2 = materialRef.current) == null || (_materialRef$current2 = _materialRef$current2.__r3f.parent) == null ? void 0 : _materialRef$current2.object);

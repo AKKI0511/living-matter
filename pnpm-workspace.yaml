@@ -1,0 +1,6 @@
+allowBuilds:
+  esbuild: true
+  agent-browser: true
+  sharp: true
+patchedDependencies:
+  '@react-three/drei@10.7.8': patches/@react-three__drei@10.7.8.patch
