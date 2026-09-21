@@ -2,6 +2,7 @@
 
 - Use Node 24 and pnpm. Run `pnpm dev` for the world.
 - `src/game/world.ts` owns geometry; `decisions.ts` owns the replaceable selection contract. Keep selection independent of rendering and physics.
+- There is exactly one matter body. `affordances.ts` supplies bidirectional physical candidates; keep stage IDs and ordering out of the selection policy. Never retract occupied support.
 - Simulation runs at 60 Hz. Keep frame updates out of React state.
 - Keep atmosphere mounted across restarts to reuse the renderer's environment cache. The Drei patch releases reflection buffers and blur geometry.
 - Run `pnpm typecheck`, `pnpm test`, and `pnpm build`. Verify movement, formations, recovery, completion, and restart in a browser after gameplay changes.

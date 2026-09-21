@@ -5,42 +5,34 @@ export type Site = {
   id: string;
   start: Vec3;
   end: Vec3;
-  idle: Vec3;
   candidates: FormationKind[];
-  preferred: FormationKind;
+  medium?: "air" | "water";
 };
 export const sites: Site[] = [
   {
     id: "reach",
     start: [0, 0, -25],
     end: [0, 0, -45],
-    idle: [-5, 1.4, -22],
     candidates: ["bridge", "platform"],
-    preferred: "bridge",
   },
   {
     id: "rise",
     start: [0, 0, -69],
     end: [0, 6, -85],
-    idle: [5, 1.4, -66],
     candidates: ["stairs", "platform"],
-    preferred: "stairs",
   },
   {
     id: "drift",
     start: [0, 6, -111],
     end: [0, 6, -133],
-    idle: [-5, 7.4, -108],
     candidates: ["platform", "bridge"],
-    preferred: "platform",
   },
   {
     id: "tide",
+    medium: "water",
     start: [0, 6, -155],
     end: [0, 6, -183],
-    idle: [5, 7.4, -152],
     candidates: ["floating-path", "platform"],
-    preferred: "floating-path",
   },
 ];
 export const islands: StructureBox[] = [
@@ -64,7 +56,7 @@ export function structureBoxes(
   const [x, y, z] = site.start;
   const length = z - site.end[2];
   if (kind === "platform")
-    return [{ position: [x, y - 0.44, z + 1], size: [4.8, 1, 4.8] }];
+    return [{ position: [x, y - 0.32, z - 2.55], size: [4.8, 1, 4.8] }];
   if (kind === "stairs")
     return Array.from({ length: 32 }, (_, i) => ({
       position: [
@@ -108,19 +100,6 @@ export function collisionBoxes(
 }
 
 export type MatterPose = { position: Vec3; scale: Vec3 };
-export function restingPose(site: Site, index: number): MatterPose {
-  const ix = index % 8,
-    iy = Math.floor(index / 64),
-    iz = Math.floor(index / 8) % 8;
-  return {
-    position: [
-      site.idle[0] + (ix - 3.5) * 0.48,
-      site.idle[1] + iy * 0.48,
-      site.idle[2] + (iz - 3.5) * 0.48,
-    ],
-    scale: [0.435, 0.435, 0.435],
-  };
-}
 export function formationPose(
   site: Site,
   kind: FormationKind,
@@ -136,10 +115,10 @@ export function formationPose(
     return {
       position: [
         site.start[0] + (x - 3.5) * 0.6,
-        site.start[1] - 0.08 - iy * 0.11,
-        site.start[2] + 1 + (iz - 3.5) * 0.6,
+        site.start[1] + 0.1175 - iy * 0.125,
+        site.start[2] - 2.55 + (iz - 3.5) * 0.6,
       ],
-      scale: [0.576, 0.09, 0.576],
+      scale: [0.576, 0.12, 0.576],
     };
   }
   const stepY =
@@ -174,6 +153,6 @@ export function platformOffset(site: Site, elapsed: number): Vec3 {
   return [
     0,
     (site.end[1] - site.start[1]) * t,
-    (site.end[2] - site.start[2] - 2) * t,
+    (site.end[2] - site.start[2] + 5.1) * t,
   ];
 }

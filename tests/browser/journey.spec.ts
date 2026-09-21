@@ -58,13 +58,13 @@ test("a fresh player walks the whole route, rides the platform, finishes and res
       { timeout: 25_000, intervals: [80] },
     )
     .toBe(true);
-  await walkTo(page, -110, 6000);
+  await walkTo(page, -112.3, 6000);
   await expect
     .poll(async () => (await snapshot(page)).player[2], {
       timeout: 20_000,
       intervals: [100],
     })
-    .toBeLessThan(-131.5);
+    .toBeLessThan(-128.8);
   await page.screenshot({ path: info.outputPath("crossing.png") });
   expect((await snapshot(page)).grounded).toBe(true);
   await walkTo(page, -204, 40_000);

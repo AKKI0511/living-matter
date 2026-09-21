@@ -54,6 +54,7 @@ export default function Experience() {
       input.sprint = keys.has("ShiftLeft") || keys.has("ShiftRight");
     };
     const down = (e: KeyboardEvent) => {
+      if (e.code === "KeyT" && !e.repeat) useGame.getState().toggleNight();
       if (e.code === "Escape" && useGame.getState().phase === "playing") {
         useGame.getState().setPhase("paused");
         document.exitPointerLock?.();
@@ -149,6 +150,7 @@ export default function Experience() {
     useGame.getState().restart();
     capturePointer();
   };
+  const night = useGame((s) => s.night);
   const panel = phase !== "playing";
   return (
     <main className={`experience phase-${phase}`}>
@@ -167,6 +169,14 @@ export default function Experience() {
         </SceneBoundary>
       </div>
       <div className="film" aria-hidden="true" />
+      <button
+        className="time-toggle"
+        aria-label={night ? "Switch to day" : "Switch to night"}
+        onClick={() => useGame.getState().toggleNight()}
+      >
+        {night ? "Day" : "Night"}
+        <span className="desktop"> · T</span>
+      </button>
       {panel && (
         <section
           className="overlay"
@@ -211,10 +221,15 @@ export default function Experience() {
                 ? "The world moved with you."
                 : phase === "paused"
                   ? "The light is still waiting."
-                  : "Follow the light. The way will find you."}
+                  : "One living intelligence. No commands. Change your mind, double back, try to outwit it."}
             </p>
           </div>
           <div className="entry">
+            {phase === "ready" && (
+              <p className="preview-note">
+                Deterministic preview · built for an AI decision source
+              </p>
+            )}
             {phase === "loading" ? (
               <p className="loading" role="status">
                 <span /> Shaping the world
@@ -274,7 +289,7 @@ export default function Experience() {
           </div>
           <div className="footer">
             <span>A SMALL JOURNEY, AT YOUR OWN PACE</span>
-            <span>HEADPHONES RECOMMENDED</span>
+            <span>AT NIGHT, LOOK UP. THE SKY REMEMBERS.</span>
           </div>
         </section>
       )}
@@ -293,9 +308,11 @@ export default function Experience() {
           <div className={`hint ${hint ? "visible" : ""}`} aria-hidden={!hint}>
             <span className="desktop">
               WASD to move · {lock ? "mouse" : "drag"} to look · space to jump ·
-              shift to run
+              shift to run · Esc to pause · T for day / night
             </span>
-            <span className="touch-copy">Move toward the light</span>
+            <span className="touch-copy">
+              Follow the light. Try changing your mind.
+            </span>
           </div>
           <TouchControls />
         </>

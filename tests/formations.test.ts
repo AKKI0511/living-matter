@@ -49,7 +49,9 @@ test("moving platforms dwell at both shores and return without discontinuities",
     assert.ok(platformOffset(site, 2.9).every((n) => n === 0));
     const far = platformOffset(site, 10);
     assert.equal(site.start[1] + far[1], site.end[1]);
-    assert.equal(site.start[2] + 1 + far[2], site.end[2] - 1);
+    assert.ok(
+      Math.abs(site.start[2] - 2.55 + far[2] - (site.end[2] + 2.55)) < 1e-8,
+    );
     assert.ok(platformOffset(site, 18).every((n) => n === 0));
     for (let t = 0; t < 18; t += 1 / 60)
       assert.ok(
@@ -57,5 +59,14 @@ test("moving platforms dwell at both shores and return without discontinuities",
           platformOffset(site, t + 1 / 60)[2] - platformOffset(site, t)[2],
         ) < 0.18,
       );
+  }
+});
+
+test("platform docks stay wholly outside both shore volumes", () => {
+  for (const site of sites) {
+    const b = structureBoxes(site, "platform")[0];
+    assert.ok(b.position[2] + b.size[2] / 2 < site.start[2] - 0.1);
+    const far = platformOffset(site, 10);
+    assert.ok(b.position[2] + far[2] - b.size[2] / 2 > site.end[2] + 0.1);
   }
 });

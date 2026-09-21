@@ -115,18 +115,20 @@ export function Player({ runtime }: { runtime: Runtime }) {
       m.airZ = m.carrierZ;
     } else if (runtime.grounded && m.y < 0) m.y = -0.6;
     m.y = Math.max(-24, m.y - 19 * dt);
+    let supportedDeck: number | null = null;
     let carryX = 0,
       carryY = 0,
       carryZ = 0;
     runtime.states.forEach((s, i) => {
       if (s.phase !== "active" || s.kind !== "platform" || m.y > 1) return;
       const site = sites[i],
-        deck = site.start[1] + s.offset[1];
+        deck = site.start[1] + 0.18 + s.previousOffset[1];
       if (
         Math.abs(pos.x - site.start[0]) < 2.65 &&
-        Math.abs(pos.z - (site.start[2] + 1 + s.offset[2])) < 2.65 &&
+        Math.abs(pos.z - (site.start[2] - 2.55 + s.previousOffset[2])) < 2.65 &&
         Math.abs(pos.y - 0.825 - deck) < 0.3
       ) {
+        supportedDeck = site.start[1] + 0.18 + s.offset[1];
         carryX += s.offset[0] - s.previousOffset[0];
         carryY += s.offset[1] - s.previousOffset[1];
         carryZ += s.offset[2] - s.previousOffset[2];
@@ -140,6 +142,7 @@ export function Player({ runtime }: { runtime: Runtime }) {
       m.airX *= Math.exp(-0.35 * dt);
       m.airZ *= Math.exp(-0.35 * dt);
     }
+    // Queries use the explicit formation admission set; inactive proxies must never become invisible support.
     kcc.computeColliderMovement(
       col,
       {
@@ -148,6 +151,12 @@ export function Player({ runtime }: { runtime: Runtime }) {
         z: (m.z + m.airZ) * dt + carryZ,
       },
       rapier.QueryFilterFlags.EXCLUDE_SENSORS,
+      undefined,
+      (c) =>
+        (!runtime.matterColliderHandles.has(c.handle) ||
+          runtime.solidColliderHandles.has(c.handle)) &&
+        (supportedDeck === null ||
+          c.parent()?.handle !== runtime.platformBodyHandle),
     );
     const delta = kcc.computedMovement();
     if (diagnosticsEnabled.current) {
@@ -169,7 +178,19 @@ export function Player({ runtime }: { runtime: Runtime }) {
         contacts,
       };
     }
-    const grounded = kcc.computedGrounded();
+    let grounded = kcc.computedGrounded();
+    if (supportedDeck !== null && m.y <= 0) {
+      const s = runtime.states[runtime.activeSite!],
+        site = sites[runtime.activeSite!];
+      if (
+        Math.abs(pos.x + delta.x - site.start[0]) < 2.65 &&
+        Math.abs(pos.z + delta.z - (site.start[2] - 2.55 + s.offset[2])) < 2.65
+      ) {
+        delta.y = supportedDeck + 0.825 - pos.y;
+        grounded = true;
+        m.y = -0.6;
+      }
+    }
     if (grounded && !m.wasGrounded && m.y < -3) sound.land();
     m.wasGrounded = grounded;
     runtime.grounded = grounded;
@@ -233,6 +254,14 @@ export function Player({ runtime }: { runtime: Runtime }) {
         activeStructure: activeIndex < 0 ? null : sites[activeIndex].id,
       });
       if (runtime.history.length > 40) runtime.history.shift();
+      const last = runtime.constellation.at(-1);
+      if (
+        runtime.grounded &&
+        (!last || Math.hypot(next.x - last[0], next.z - last[2]) > 1.5)
+      ) {
+        runtime.constellation.push([next.x, next.y, next.z]);
+        if (runtime.constellation.length > 320) runtime.constellation.shift();
+      }
     }
   });
   useFrame((_, dt) => {

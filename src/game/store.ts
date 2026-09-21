@@ -8,6 +8,8 @@ type GameState = {
   muted: boolean;
   quality: "high" | "low";
   reducedMotion: boolean;
+  night: boolean;
+  toggleNight: () => void;
   setPhase: (phase: Phase) => void;
   restart: () => void;
   toggleMute: () => void;
@@ -19,6 +21,8 @@ export const useGame = create<GameState>((set) => ({
   muted: false,
   quality: "high",
   reducedMotion: false,
+  night: false,
+  toggleNight: () => set((s) => ({ night: !s.night })),
   setPhase: (phase) => set({ phase }),
   restart: () => set((s) => ({ run: s.run + 1, phase: "playing" })),
   toggleMute: () => set((s) => ({ muted: !s.muted })),

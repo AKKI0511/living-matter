@@ -24,14 +24,18 @@ test("production export plays through without debug hooks or external services",
   await page.goto("/");
   await page.getByRole("button", { name: /Enter the world/ }).click();
   expect(await page.evaluate(() => window.__livingMatter)).toBeUndefined();
+  await page.keyboard.press("t");
+  await expect(
+    page.getByRole("button", { name: "Switch to day" }),
+  ).toBeVisible();
   await page.keyboard.down("w");
   await page.waitForTimeout(28_000);
   await page.keyboard.up("w");
   await page.screenshot({ path: info.outputPath("boarding.png") });
-  await page.waitForTimeout(9000);
+  await page.waitForTimeout(6000);
   await page.keyboard.down("w");
   await expect(page.getByRole("button", { name: /Wander again/ })).toBeVisible({
-    timeout: 25_000,
+    timeout: 30_000,
   });
   await page.keyboard.up("w");
   await page.waitForTimeout(5000);

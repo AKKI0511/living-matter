@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useMemo, useRef } from "react";
-import { useFrame } from "@react-three/fiber";
+import { useFrame, useThree } from "@react-three/fiber";
 import {
   Environment,
   Lightformer,
@@ -18,6 +18,7 @@ import {
 import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
 import { islands } from "./world";
 import { useGame } from "./store";
+import { NightStars } from "./Constellation";
 
 const stoneShader = (
   shader: Parameters<NonNullable<MeshStandardMaterial["onBeforeCompile"]>>[0],
@@ -64,6 +65,7 @@ function Sunlight() {
   const light = useRef<DirectionalLight>(null);
   const target = useMemo(() => new Object3D(), []);
   const quality = useGame((s) => s.quality);
+  const night = useGame((s) => s.night);
   useFrame(({ camera }) => {
     if (!light.current) return;
     light.current.position.set(
@@ -80,8 +82,8 @@ function Sunlight() {
       <directionalLight
         ref={light}
         target={target}
-        intensity={3.6}
-        color="#ffdeb1"
+        intensity={night ? 0.85 : 3.6}
+        color={night ? "#9cbcff" : "#ffdeb1"}
         castShadow
         shadow-mapSize={[
           quality === "high" ? 2048 : 1024,
@@ -101,21 +103,25 @@ function Sunlight() {
 }
 
 function Sky() {
+  const invalidate = useThree((s) => s.invalidate);
   const material = useMemo(
     () =>
       new ShaderMaterial({
         side: BackSide,
         depthWrite: false,
         uniforms: {
+          night: { value: 0 },
           zenith: { value: new Color("#234a69") },
           horizon: { value: new Color("#e4cba4") },
         },
         vertexShader:
           "varying vec3 vDirection; void main(){ vDirection=position; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.); }",
-        fragmentShader: `varying vec3 vDirection; uniform vec3 zenith; uniform vec3 horizon;
+        fragmentShader: `varying vec3 vDirection; uniform vec3 zenith; uniform vec3 horizon; uniform float night;
       void main(){ vec3 d=normalize(vDirection); float h=max(d.y,0.); vec3 c=mix(horizon,zenith,pow(h,.45));
       vec3 sun=normalize(vec3(-.34,.19,-1.)); float glow=pow(max(dot(d,sun),0.),60.); c+=vec3(.3,.19,.075)*glow;
-      float disk=smoothstep(.99978,.99986,dot(d,sun)); c=mix(c,vec3(2.,1.65,1.12),disk); gl_FragColor=vec4(c,1.);
+      float disk=smoothstep(.99978,.99986,dot(d,sun)); c=mix(c,vec3(2.,1.65,1.12),disk); vec3 nocturne=mix(vec3(.023,.043,.085),vec3(.002,.006,.025),pow(h,.4));
+      nocturne+=vec3(.75,.85,1.)*disk;
+      gl_FragColor=vec4(mix(c,nocturne,night),1.);
       #include <tonemapping_fragment>
       #include <colorspace_fragment>
       }`,
@@ -123,6 +129,15 @@ function Sky() {
     [],
   );
   useEffect(() => () => material.dispose(), [material]);
+  useFrame((_, dt) => {
+    const target = useGame.getState().night ? 1 : 0;
+    material.uniforms.night.value +=
+      (target - material.uniforms.night.value) *
+      (useGame.getState().reducedMotion
+        ? 1
+        : 1 - Math.exp(-Math.min(dt, 0.1) * 3));
+    if (Math.abs(target - material.uniforms.night.value) > 0.002) invalidate();
+  });
   return (
     <mesh material={material}>
       <sphereGeometry args={[700, 32, 20]} />
@@ -135,15 +150,19 @@ function Water({ lake = false }: { lake?: boolean }) {
   const uniforms = useMemo(
     () => ({
       time: { value: 0 },
+      night: { value: 0 },
       tint: { value: new Color(lake ? "#50767a" : "#244e5c") },
     }),
     [lake],
   );
   useFrame((_, dt) => {
+    if (mat.current)
+      mat.current.uniforms.night.value = useGame.getState().night ? 1 : 0;
     if (mat.current && useGame.getState().phase === "playing")
       mat.current.uniforms.time.value += Math.min(dt, 0.05);
   });
   const quality = useGame((s) => s.quality);
+  const night = useGame((s) => s.night);
   if (lake && quality === "high")
     return (
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 5.14, -169]}>
@@ -157,7 +176,7 @@ function Water({ lake = false }: { lake?: boolean }) {
           depthScale={0.35}
           minDepthThreshold={0.3}
           maxDepthThreshold={1.2}
-          color="#436b70"
+          color={night ? "#1b3449" : "#436b70"}
           metalness={0.6}
           mirror={0.65}
         />
@@ -174,13 +193,14 @@ function Water({ lake = false }: { lake?: boolean }) {
         uniforms={uniforms}
         vertexShader={`varying vec3 vWorld; void main(){ vec4 world=modelMatrix*vec4(position,1.); vWorld=world.xyz; gl_Position=projectionMatrix*viewMatrix*world; }`}
         fragmentShader={`
-      varying vec3 vWorld; uniform float time; uniform vec3 tint;
+      varying vec3 vWorld; uniform float time; uniform vec3 tint; uniform float night;
       void main(){ vec2 p=vWorld.xz; float wave=sin(p.x*1.8+p.y*.6+time*.8)*.35+sin(p.y*2.7-p.x*.5-time*.65)*.2+sin(p.x*5.+p.y*4.+time)*.08;
       vec3 view=normalize(cameraPosition-vWorld); float fresnel=pow(1.-max(view.y,0.),3.);
       vec3 col=mix(tint,vec3(.55,.65,.64),fresnel*.8); col+=wave*.023;
       float stripe=pow(max(0.,sin(p.y*3.+wave*3.+time*.2)),24.);
       float sun=exp(-pow((p.x+32.)/13.,2.)); col+=vec3(.55,.4,.18)*stripe*sun*.35;
       float fog=1.-exp(-length(cameraPosition-vWorld)*.003); col=mix(col,vec3(.55,.65,.65),fog);
+      col=mix(col,col*vec3(.12,.2,.34),night);
       gl_FragColor=vec4(col,1.);
       #include <tonemapping_fragment>
       #include <colorspace_fragment>
@@ -246,14 +266,25 @@ function Landmark() {
 }
 
 export function Atmosphere() {
+  const night = useGame((s) => s.night);
   return (
     <>
       <Sky />
-      <fog attach="fog" args={["#afc2c4", 45, 290]} />
-      <ambientLight intensity={0.12} color="#b3cad1" />
-      <hemisphereLight args={["#b3d2e2", "#454431", 0.75]} />
+      <NightStars />
+      <fog attach="fog" args={[night ? "#0b162a" : "#afc2c4", 45, 290]} />
+      <ambientLight
+        intensity={night ? 0.18 : 0.12}
+        color={night ? "#6c91ca" : "#b3cad1"}
+      />
+      <hemisphereLight
+        args={[night ? "#648ac9" : "#b3d2e2", "#454431", night ? 0.4 : 0.75]}
+      />
       <Sunlight />
-      <Environment resolution={128} frames={1} environmentIntensity={0.65}>
+      <Environment
+        resolution={128}
+        frames={1}
+        environmentIntensity={night ? 0.2 : 0.65}
+      >
         <Lightformer
           form="rect"
           intensity={2.2}

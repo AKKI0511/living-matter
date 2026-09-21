@@ -330,3 +330,60 @@ h1 {
     transition: none !important;
   }
 }
+
+/* Controls remain legible on both touch and desktop displays. */
+.controls {
+  font-size: 15px;
+  line-height: 1.8;
+  letter-spacing: 0.4px;
+}
+.hint {
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 0 24px;
+  color: #fff5df;
+}
+.settings button {
+  font-size: 15px;
+  min-height: 40px;
+}
+.preview-note {
+  font-size: 13px;
+  line-height: 1.6;
+  color: #cad4d4;
+  margin-bottom: 20px;
+}
+.description {
+  max-width: 400px;
+  line-height: 1.65;
+}
+.time-toggle {
+  position: fixed;
+  z-index: 15;
+  right: 82px;
+  top: 22px;
+  min-height: 36px;
+  padding: 6px 12px;
+  border: 1px solid #ffffff30;
+  border-radius: 20px;
+  background: #11233480;
+  color: #f5e8cd;
+  font-size: 14px;
+  backdrop-filter: blur(12px);
+}
+@media (max-width: 850px) {
+  .controls {
+    font-size: 14px;
+  }
+  .hint {
+    font-size: 15px;
+    bottom: 190px;
+  }
+  .time-toggle {
+    right: 72px;
+    top: 20px;
+  }
+  .description {
+    max-width: 300px;
+  }
+}

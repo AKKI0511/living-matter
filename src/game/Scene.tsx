@@ -11,9 +11,10 @@ import {
 import { ACESFilmicToneMapping } from "three";
 import { useGame } from "./store";
 import { Player } from "./Player";
+import { Constellation } from "./Constellation";
 import { Matter } from "./Matter";
 import { Atmosphere, World } from "./EnvironmentWorld";
-import { createRuntime } from "./runtime";
+import { createRuntime, formMatter } from "./runtime";
 import { input } from "./input";
 import type { FormationKind, Vec3 } from "./world";
 import { sites } from "./world";
@@ -37,6 +38,7 @@ declare global {
 
 function Simulation() {
   const gl = useThree((s) => s.gl);
+  const scene = useThree((s) => s.scene);
   const runtime = useMemo(() => createRuntime(), []);
   const phase = useGame((s) => s.phase);
   useEffect(() => {
@@ -45,15 +47,32 @@ function Simulation() {
       useGame.getState().setPhase("ready");
     if (process.env.NODE_ENV === "development")
       window.__livingMatter = {
-        snapshot: () => ({
-          time: runtime.time,
-          player: runtime.player,
-          grounded: runtime.grounded,
-          recoveries: runtime.recoveries,
-          states: runtime.states,
-          phase: useGame.getState().phase,
-          diagnostics: runtime.diagnostics,
-        }),
+        snapshot: () => {
+          let matterMeshes = 0,
+            matterUnits = 0;
+          scene.traverse((o) => {
+            if ("isInstancedMesh" in o && "count" in o) {
+              matterMeshes++;
+              matterUnits += o.count as number;
+            }
+          });
+          return {
+            matterMeshes,
+            matterUnits,
+            time: runtime.time,
+            player: runtime.player,
+            grounded: runtime.grounded,
+            recoveries: runtime.recoveries,
+            states: runtime.states,
+            phase: useGame.getState().phase,
+            diagnostics: runtime.diagnostics,
+            activeSite: runtime.activeSite,
+            matterCount: 512,
+            companion: runtime.companion,
+            constellation: runtime.constellation.length,
+            assistance: runtime.assistance,
+          };
+        },
         renderInfo: () => ({
           ...gl.info.memory,
           calls: gl.info.render.calls,
@@ -63,12 +82,10 @@ function Simulation() {
           runtime.forcedPosition = p;
         },
         formation: (i, kind) => {
-          if (sites[i]?.candidates.includes(kind))
-            Object.assign(runtime.states[i], {
-              kind,
-              phase: "forming",
-              since: runtime.time,
-            });
+          if (sites[i]?.candidates.includes(kind)) {
+            formMatter(runtime, i, kind);
+            runtime.manualFormation = true;
+          }
         },
         look: (yaw, pitch) => {
           input.yaw = yaw;
@@ -80,7 +97,7 @@ function Simulation() {
       runtime.gate.reset();
       delete window.__livingMatter;
     };
-  }, [runtime, gl]);
+  }, [runtime, gl, scene]);
   return (
     <Physics
       paused={phase !== "playing"}
@@ -90,6 +107,7 @@ function Simulation() {
     >
       <World />
       <Matter runtime={runtime} />
+      <Constellation runtime={runtime} />
       <Player runtime={runtime} />
     </Physics>
   );

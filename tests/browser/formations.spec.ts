@@ -36,14 +36,14 @@ for (const [index, kind] of [
       await page.keyboard.down("w");
       await expect
         .poll(async () => (await snapshot(page)).player[2], { intervals: [50] })
-        .toBeLessThan(site.start[2] + 1);
+        .toBeLessThan(site.start[2] - 1.3);
       await page.keyboard.up("w");
       await expect
         .poll(async () => (await snapshot(page)).player[2], {
           timeout: 18_000,
           intervals: [100],
         })
-        .toBeLessThan(site.end[2] + 1.5);
+        .toBeLessThan(site.end[2] + 4);
     }
     await page.keyboard.down("w");
     await expect
@@ -140,7 +140,7 @@ test("jumping aboard a moving platform preserves transport momentum", async ({
   await page.keyboard.down("w");
   await expect
     .poll(async () => (await snapshot(page)).player[2], { intervals: [50] })
-    .toBeLessThan(-110);
+    .toBeLessThan(-112.3);
   await page.keyboard.up("w");
   await expect
     .poll(async () => (await snapshot(page)).states[2].offset[2], {

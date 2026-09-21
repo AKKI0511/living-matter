@@ -64,3 +64,22 @@ test("a pending request never queues another provider call", async () => {
   resolve({ candidateId: null });
   await pending;
 });
+
+test("explicit no-intervention differs from an unavailable provider", async () => {
+  const none = new DecisionGate({
+    select: async () => ({ candidateId: null }),
+  });
+  assert.deepEqual(await none.requestResult(context), {
+    valid: true,
+    candidate: null,
+  });
+  const failed = new DecisionGate({
+    select: async () => {
+      throw new Error("offline");
+    },
+  });
+  assert.deepEqual(await failed.requestResult(context), {
+    valid: false,
+    candidate: null,
+  });
+});
