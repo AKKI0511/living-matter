@@ -11,5 +11,4 @@ playwright-report/
 *.tsbuildinfo
 .DS_Store
 artifacts/
-.agents/skills/
 skills-lock.json
