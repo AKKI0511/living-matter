@@ -1,21 +1,59 @@
-# Living Matter
+<p align="center">
+  <img src="docs/assets/living-matter.svg" alt="Living Matter. Follow the light. The way will find you." width="100%" />
+</p>
 
-A quiet browser world in motion. Follow the light; the way will find you.
+<p align="center">A quiet 3D browser world. One living body. A path that moves with you.</p>
 
-## Run
+<p align="center">
+  <a href="#play">Play locally</a> · <a href="docs/README.md">Explore the docs</a> · <a href="docs/jev.md">Meet Jev</a> · <a href="LICENSE">MIT</a>
+</p>
 
-Node 24 LTS and pnpm 12: `pnpm install`, then `pnpm dev`.
-Use WASD or arrow keys to move, mouse to look, Space to jump, Shift to run, Escape to pause, and T to switch day/night. Touch controls are available.
+Walk toward the light. Watch 512 pieces of matter gather into steps, bridges, and moving platforms. Turn around. Change your mind. See what follows.
 
-Copy `.env.example` to `.env.local`. Set `NEXT_PUBLIC_DECISION_BACKEND=preview` (default) or `jev`; for live decisions add `TYPESAFE_API_KEY`. Restart development or rebuild production after switching. The key stays server-side.
+Switch to night for a living black hole and a constellation drawn from your journey. Headphones recommended.
 
-`pnpm build` builds the app; `pnpm start` serves it with its decision endpoint. A Node.js server is required.
-Run `pnpm typecheck`, `pnpm test`, and `pnpm test:e2e` to verify changes.
+## Play
 
-## Code
+Use Node.js 24 and pnpm 12. No API key needed for preview mode.
 
-One set of 512 units follows you. Walking builds a route in sections, retaining support while recycling the other half ahead. Look sideways for alternate routes or double back. At night, your route becomes a constellation beneath a living black hole.
+```sh
+git clone https://github.com/AKKI0511/living-matter.git
+cd living-matter
+pnpm install
+pnpm dev
+```
 
-React 19.2.8 matches Fiber 9.7's supported peer range. Development Strict Mode is disabled because its renderer teardown loses the WebGL context with this dependency combination. Fonts and synthesized audio are served locally.
+Open [localhost:3000](http://localhost:3000) and enter the world.
 
-`world.ts` and `weave.ts` own geometry; both backends share physical candidates. `decision-backend.ts` switches sources. `server/decision-request.ts` batches destination Noul and traversal Score questions, then composes their answers with explicit thresholds and stability rules. The server route holds credentials and request limits. Uncertainty holds support. Development logs expose judgments and token usage; thresholds need live playtesting.
+| Move | Look | Jump | Run | Pause | Day / night |
+| :---: | :---: | :---: | :---: | :---: | :---: |
+| WASD / arrows | Mouse / drag | Space | Shift | Esc | T |
+
+On touch screens, use your left thumb to move, your right thumb to look, and the jump button.
+
+## Play with Jev
+
+Preview uses deterministic decisions. Live mode uses [Jev](https://docs.typesafe.ai/concepts/system-one), TypeSafe's System One model, to interpret your movement.
+
+Create `.env.local` with:
+
+```dotenv
+NEXT_PUBLIC_DECISION_BACKEND=jev
+TYPESAFE_API_KEY=your_api_key
+TYPESAFE_DEFAULT_MODEL=jev-1.13.0
+```
+
+Restart the dev server. Set the backend to `preview` to switch back. Live mode is experimental; [here is how it works](docs/jev.md).
+
+## Run a production build
+
+```sh
+pnpm build
+pnpm start
+```
+
+Use a Node.js host with WebGL 2 in the browser. Set environment variables before building; keep the API key on the server.
+
+---
+
+[The experience](docs/experience.md) · [Architecture](docs/architecture.md) · [Development](docs/development.md)
