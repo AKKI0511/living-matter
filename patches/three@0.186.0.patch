@@ -1,0 +1,78 @@
+diff --git a/build/three.module.js b/build/three.module.js
+index c52087acfabae80efabb8cc05e3a1d96e35a1426..88bb13f3ff31289b1b2b25c6261c3ee44e597f67 100644
+--- a/build/three.module.js
++++ b/build/three.module.js
+@@ -3400,26 +3400,14 @@ function _getGGXShader( lodMax, width, height ) {
+ 			// "Sampling the GGX Distribution of Visible Normals"
+ 			// https://jcgt.org/published/0007/04/01/
+ 			vec3 importanceSampleGGX_VNDF(vec2 Xi, vec3 V, float roughness) {
+-				float alpha = roughness * roughness;
+-
+-				// Section 4.1: Orthonormal basis
+-				vec3 T1 = vec3(1.0, 0.0, 0.0);
+-				vec3 T2 = cross(V, T1);
+-
+-				// Section 4.2: Parameterization of projected area
+-				float r = sqrt(Xi.x);
+-				float phi = 2.0 * PI * Xi.y;
+-				float t1 = r * cos(phi);
+-				float t2 = r * sin(phi);
+-				float s = 0.5 * (1.0 + V.z);
+-				t2 = (1.0 - s) * sqrt(1.0 - t1 * t1) + s * t2;
+-
+-				// Section 4.3: Reprojection onto hemisphere
+-				vec3 Nh = t1 * T1 + t2 * T2 + sqrt(max(0.0, 1.0 - t1 * t1 - t2 * t2)) * V;
+-
+-				// Section 3.4: Transform back to ellipsoid configuration
+-				return normalize(vec3(alpha * Nh.x, alpha * Nh.y, max(0.0, Nh.z)));
+-			}
++                // PMREM calls this with tangent-space V=(0,0,1). Specializing
++                // the axial case avoids subtracting trigonometric roundoff.
++                float alpha = roughness * roughness;
++                float r = sqrt(Xi.x);
++                float phi = 2.0 * PI * Xi.y;
++                vec3 Nh = vec3(r * cos(phi), r * sin(phi), sqrt(max(0.0, 1.0 - Xi.x)));
++                return normalize(vec3(alpha * Nh.xy, Nh.z));
++            }
+ 
+ 			void main() {
+ 				vec3 N = normalize(vOutputDirection);
+diff --git a/src/extras/PMREMGenerator.js b/src/extras/PMREMGenerator.js
+index faadec356839684d19ae2b1a106871ee4839aecd..ecc57af265e78e2d5435333212b9a3fa3432b4b5 100644
+--- a/src/extras/PMREMGenerator.js
++++ b/src/extras/PMREMGenerator.js
+@@ -785,26 +785,14 @@ function _getGGXShader( lodMax, width, height ) {
+ 			// "Sampling the GGX Distribution of Visible Normals"
+ 			// https://jcgt.org/published/0007/04/01/
+ 			vec3 importanceSampleGGX_VNDF(vec2 Xi, vec3 V, float roughness) {
+-				float alpha = roughness * roughness;
+-
+-				// Section 4.1: Orthonormal basis
+-				vec3 T1 = vec3(1.0, 0.0, 0.0);
+-				vec3 T2 = cross(V, T1);
+-
+-				// Section 4.2: Parameterization of projected area
+-				float r = sqrt(Xi.x);
+-				float phi = 2.0 * PI * Xi.y;
+-				float t1 = r * cos(phi);
+-				float t2 = r * sin(phi);
+-				float s = 0.5 * (1.0 + V.z);
+-				t2 = (1.0 - s) * sqrt(1.0 - t1 * t1) + s * t2;
+-
+-				// Section 4.3: Reprojection onto hemisphere
+-				vec3 Nh = t1 * T1 + t2 * T2 + sqrt(max(0.0, 1.0 - t1 * t1 - t2 * t2)) * V;
+-
+-				// Section 3.4: Transform back to ellipsoid configuration
+-				return normalize(vec3(alpha * Nh.x, alpha * Nh.y, max(0.0, Nh.z)));
+-			}
++                // PMREM calls this with tangent-space V=(0,0,1). Specializing
++                // the axial case avoids subtracting trigonometric roundoff.
++                float alpha = roughness * roughness;
++                float r = sqrt(Xi.x);
++                float phi = 2.0 * PI * Xi.y;
++                vec3 Nh = vec3(r * cos(phi), r * sin(phi), sqrt(max(0.0, 1.0 - Xi.x)));
++                return normalize(vec3(alpha * Nh.xy, Nh.z));
++            }
+ 
+ 			void main() {
+ 				vec3 N = normalize(vOutputDirection);

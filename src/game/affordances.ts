@@ -31,7 +31,14 @@ export function availableCandidates(
       Math.abs(position[1] - 0.825 - from[1]) > 2
     )
       return [];
-    return site.candidates.flatMap((kind) =>
+    // Walking uses the rolling route in both backends. Whole-span forms remain
+    // available to the development harness; riding is a distinct live alternative.
+    const kinds = site.candidates.includes("weave")
+      ? site.candidates.filter(
+          (kind) => kind === "weave" || kind === "platform",
+        )
+      : site.candidates;
+    return kinds.flatMap((kind) =>
       (kind === "weave" ? [-1, 0, 1] : [0]).map((bend) => ({
         id: `${site.id}:${kind}${kind === "weave" ? `:${bend + 1}` : ""}`,
         siteId: site.id,

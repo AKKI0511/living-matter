@@ -1,5 +1,61 @@
 import { expect, test } from "@playwright/test";
 
+test("ordinary preview walking completes using rolling matter without browser warnings", async ({
+  page,
+}) => {
+  const warnings: string[] = [];
+  page.on("console", (m) => {
+    if (m.type() === "warning" || m.type() === "error") warnings.push(m.text());
+  });
+  page.on("pageerror", (e) => warnings.push(e.message));
+  await page.goto("/");
+  await expect(page.getByText(/Deterministic preview/)).toBeVisible();
+  await page.getByRole("button", { name: /Enter the world/ }).click();
+  const crossed = new Set<number>();
+  await page.keyboard.down("w");
+  try {
+    await expect
+      .poll(
+        async () => {
+          const state = await page.evaluate(
+            () =>
+              window.__livingMatter!.snapshot() as {
+                phase: string;
+                activeSite: number | null;
+                recoveries: number;
+                states: { kind: string; phase: string }[];
+                weave: { revision: number } | null;
+              },
+          );
+          expect(state.recoveries).toBe(0);
+          if (
+            state.activeSite !== null &&
+            state.states[state.activeSite].kind === "weave" &&
+            state.weave!.revision >= 2
+          )
+            crossed.add(state.activeSite);
+          return state.phase;
+        },
+        { timeout: 85000, intervals: [150] },
+      )
+      .toBe("complete");
+  } finally {
+    await page.keyboard.up("w");
+  }
+  expect([...crossed].sort()).toEqual([0, 1, 2, 3]);
+  await page.getByRole("button", { name: /Wander again/ }).click();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (window.__livingMatter!.snapshot() as { recoveries: number })
+            .recoveries,
+      ),
+    )
+    .toBe(0);
+  expect(warnings).toEqual([]);
+});
+
 test("rolling matter crosses a gap, recycles behind, and keeps exactly 512 units", async ({
   page,
 }) => {

@@ -1,0 +1,114 @@
+diff --git a/dist/events-156d8d12.esm.js b/dist/events-156d8d12.esm.js
+index 9681d0c62238d67f2d5ad389307dfd45ee8ba7ba..f58eda68d8a26ded7e770c44273158edca18495f 100644
+--- a/dist/events-156d8d12.esm.js
++++ b/dist/events-156d8d12.esm.js
+@@ -945,6 +945,24 @@ function createEvents(store) {
+ 
+ const isRenderer = def => !!(def != null && def.render);
+ const context = /* @__PURE__ */React.createContext(null);
++// Timer-backed compatibility surface for existing useFrame consumers.
++function createTimerClock() {
++  const timer = new THREE.Timer();
++  return {
++    autoStart: true, running: false, elapsedTime: 0, oldTime: 0,
++    start() { timer.reset(); this.elapsedTime = 0; this.running = true; },
++    stop() { this.getDelta(); this.running = false; this.autoStart = false; },
++    getDelta() {
++      if (!this.running) { if (this.autoStart) this.start(); return 0; }
++      timer.update();
++      const delta = timer.getDelta();
++      this.elapsedTime += delta;
++      return delta;
++    },
++    getElapsedTime() { this.getDelta(); return this.elapsedTime; }
++  };
++}
++
+ const createStore = (invalidate, advance) => {
+   const rootStore = createWithEqualityFn((set, get) => {
+     const position = new THREE.Vector3();
+@@ -1013,7 +1031,7 @@ const createStore = (invalidate, advance) => {
+       linear: false,
+       flat: false,
+       controls: null,
+-      clock: new THREE.Clock(),
++      clock: createTimerClock(),
+       pointer,
+       mouse: pointer,
+       frameloop: 'always',
+diff --git a/dist/events-4c71f21f.cjs.prod.js b/dist/events-4c71f21f.cjs.prod.js
+index 65e702ef67d954387307b168529752690a586fd0..f4bea33be3d7ad217378af79613a1ed88a4c3e6f 100644
+--- a/dist/events-4c71f21f.cjs.prod.js
++++ b/dist/events-4c71f21f.cjs.prod.js
+@@ -970,6 +970,24 @@ function createEvents(store) {
+ 
+ const isRenderer = def => !!(def != null && def.render);
+ const context = /* @__PURE__ */React__namespace.createContext(null);
++// Timer-backed compatibility surface for existing useFrame consumers.
++function createTimerClock() {
++  const timer = new THREE__namespace.Timer();
++  return {
++    autoStart: true, running: false, elapsedTime: 0, oldTime: 0,
++    start() { timer.reset(); this.elapsedTime = 0; this.running = true; },
++    stop() { this.getDelta(); this.running = false; this.autoStart = false; },
++    getDelta() {
++      if (!this.running) { if (this.autoStart) this.start(); return 0; }
++      timer.update();
++      const delta = timer.getDelta();
++      this.elapsedTime += delta;
++      return delta;
++    },
++    getElapsedTime() { this.getDelta(); return this.elapsedTime; }
++  };
++}
++
+ const createStore = (invalidate, advance) => {
+   const rootStore = traditional.createWithEqualityFn((set, get) => {
+     const position = new THREE__namespace.Vector3();
+@@ -1038,7 +1056,7 @@ const createStore = (invalidate, advance) => {
+       linear: false,
+       flat: false,
+       controls: null,
+-      clock: new THREE__namespace.Clock(),
++      clock: createTimerClock(),
+       pointer,
+       mouse: pointer,
+       frameloop: 'always',
+diff --git a/dist/events-b1bdeb1a.cjs.dev.js b/dist/events-b1bdeb1a.cjs.dev.js
+index 7785529f79299cdefe706c0df1d5c756817ca274..fb81225f66c017a4421ae02a50076ea018549d29 100644
+--- a/dist/events-b1bdeb1a.cjs.dev.js
++++ b/dist/events-b1bdeb1a.cjs.dev.js
+@@ -970,6 +970,24 @@ function createEvents(store) {
+ 
+ const isRenderer = def => !!(def != null && def.render);
+ const context = /* @__PURE__ */React__namespace.createContext(null);
++// Timer-backed compatibility surface for existing useFrame consumers.
++function createTimerClock() {
++  const timer = new THREE__namespace.Timer();
++  return {
++    autoStart: true, running: false, elapsedTime: 0, oldTime: 0,
++    start() { timer.reset(); this.elapsedTime = 0; this.running = true; },
++    stop() { this.getDelta(); this.running = false; this.autoStart = false; },
++    getDelta() {
++      if (!this.running) { if (this.autoStart) this.start(); return 0; }
++      timer.update();
++      const delta = timer.getDelta();
++      this.elapsedTime += delta;
++      return delta;
++    },
++    getElapsedTime() { this.getDelta(); return this.elapsedTime; }
++  };
++}
++
+ const createStore = (invalidate, advance) => {
+   const rootStore = traditional.createWithEqualityFn((set, get) => {
+     const position = new THREE__namespace.Vector3();
+@@ -1038,7 +1056,7 @@ const createStore = (invalidate, advance) => {
+       linear: false,
+       flat: false,
+       controls: null,
+-      clock: new THREE__namespace.Clock(),
++      clock: createTimerClock(),
+       pointer,
+       mouse: pointer,
+       frameloop: 'always',

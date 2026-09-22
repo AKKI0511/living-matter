@@ -14,8 +14,8 @@ Run `pnpm typecheck`, `pnpm test`, and `pnpm test:e2e` to verify changes.
 
 ## Code
 
-One set of 512 units follows you. Look toward alternate routes: matter can build a path in sections, retaining support while recycling its other half ahead. Double back to change its direction. At night, your route becomes a constellation beneath a living black hole.
+One set of 512 units follows you. Walking builds a route in sections, retaining support while recycling the other half ahead. Look sideways for alternate routes or double back. At night, your route becomes a constellation beneath a living black hole.
 
 React 19.2.8 matches Fiber 9.7's supported peer range. Development Strict Mode is disabled because its renderer teardown loses the WebGL context with this dependency combination. Fonts and synthesized audio are served locally.
 
-`world.ts` and `weave.ts` own geometry; `affordances.ts` supplies physical candidates. `decision-backend.ts` switches sources. `server/decision-request.ts` defines the batched SDK questions; `app/api/decision/route.ts` holds credentials and request limits. Failures hold existing support. Development server logs show model, token usage and selection; live model quality needs playtesting with your key.
+`world.ts` and `weave.ts` own geometry; both backends share physical candidates. `decision-backend.ts` switches sources. `server/decision-request.ts` batches destination Noul and traversal Score questions, then composes their answers with explicit thresholds and stability rules. The server route holds credentials and request limits. Uncertainty holds support. Development logs expose judgments and token usage; thresholds need live playtesting.

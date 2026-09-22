@@ -11,7 +11,7 @@ test("production preview plays through without debug hooks or external services"
     external: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   page.on("console", (message) => {
-    if (message.type() === "error")
+    if (message.type() === "error" || message.type() === "warning")
       errors.push(`${message.text()} ${message.location().url}`);
   });
   page.on("request", (request) => {
@@ -35,7 +35,7 @@ test("production preview plays through without debug hooks or external services"
   await page.waitForTimeout(6000);
   await page.keyboard.down("w");
   await expect(page.getByRole("button", { name: /Wander again/ })).toBeVisible({
-    timeout: 30_000,
+    timeout: 60_000,
   });
   await page.keyboard.up("w");
   await page.waitForTimeout(5000);

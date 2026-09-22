@@ -23,7 +23,7 @@ export function weaveRoute(site: Site, bend = 0, reverse = false): Vec3[] {
     const t = i / 4;
     return [
       a[0] + (b[0] - a[0]) * t + Math.sin(t * Math.PI) * bend * 5,
-      a[1] + (b[1] - a[1]) * t + (bend && (i === 1 || i === 2) ? 1.6 : 0),
+      a[1] + (b[1] - a[1]) * t + (i === 1 || i === 2 ? (bend ? 1.6 : 1.2) : 0),
       a[2] + (b[2] - a[2]) * t,
     ] as Vec3;
   });

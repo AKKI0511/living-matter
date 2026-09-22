@@ -2,5 +2,10 @@ allowBuilds:
   esbuild: true
   agent-browser: true
   sharp: true
+overrides:
+  '@dimforge/rapier3d-compat': 0.20.0
 patchedDependencies:
   '@react-three/drei@10.7.8': patches/@react-three__drei@10.7.8.patch
+  '@react-three/fiber@9.7.0': patches/@react-three__fiber@9.7.0.patch
+  n8ao@2.0.1: patches/n8ao@2.0.1.patch
+  three@0.186.0: patches/three@0.186.0.patch

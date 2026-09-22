@@ -1,6 +1,7 @@
 import { TypeSafeClient } from "@typesafe-ai/sdk";
 import {
   buildDecisionRequest,
+  composeDecision,
   decisionSchema,
 } from "@/server/decision-request";
 
@@ -63,24 +64,15 @@ export async function POST(request: Request) {
     const response = await client.systemOne(buildDecisionRequest(parsed.data), {
       signal: request.signal,
     });
-    const selected = response.answers.action.choice;
-    const index = /^c\d+$/.test(selected) ? Number(selected.slice(1)) : -1;
-    const candidate = parsed.data.candidates[index];
-    const candidateId =
-      response.answers.assistance.noul >= 0.5 && candidate
-        ? candidate.id
-        : null;
+    const decision = composeDecision(parsed.data, response.answers);
     if (process.env.NODE_ENV === "development")
       console.info("[decisions]", {
         model: response.model,
         usage: response.usage,
-        candidateId,
-        confidence: response.answers.action.confidence,
+        decision,
+        judgments: response.answers,
       });
-    return reply({
-      candidateId,
-      recheckAfterMs: response.answers.changing.noul > 0.5 ? 1500 : 6000,
-    });
+    return reply(decision);
   } catch {
     // Never return a fabricated model decision, or leak SDK request headers/errors.
     console.warn(

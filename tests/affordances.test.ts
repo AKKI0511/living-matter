@@ -39,7 +39,7 @@ test("selection depends on physical geometry and behavior, not stage identity or
   );
   assert.equal(
     candidates.find((c) => c.id === result.candidateId)?.kind,
-    "platform",
+    "weave",
   );
   const reverse = availableCandidates([0, 0.825, -52], scene);
   const returning = await source.select(
@@ -91,7 +91,7 @@ test("looking away produces no intervention, while repeated jumps can change ass
   );
   assert.equal(
     candidates.find((c) => c.id === walking.candidateId)?.kind,
-    "stairs",
+    "weave",
   );
   assert.equal(
     candidates.find((c) => c.id === jumping.candidateId)?.kind,

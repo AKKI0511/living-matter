@@ -36,6 +36,7 @@ export type DecisionContext = {
 };
 export type Intervention = {
   candidateId: string | null;
+  hold?: boolean;
   recheckAfterMs?: number;
 };
 /** Selection is asynchronous; geometry, validation and execution remain in the engine. */
@@ -69,22 +70,12 @@ export class ScenarioDecisions implements DecisionSource {
       // Looking away and retreating can mean no help. Waiting and looking across can mean help.
       if (gaze < 0.4 && travel < 0.3) continue;
       const jumping = observations.slice(-10).some((o) => o.velocity[1] > 2);
-      const preferred =
-        p.medium === "water"
-          ? "floating-path"
-          : Math.abs(p.rise) > 1
-            ? jumping
-              ? "platform"
-              : "stairs"
-            : p.span > 21
-              ? "platform"
-              : "bridge";
+      const preferred = jumping && Math.abs(p.rise) > 1 ? "platform" : "weave";
       const rank =
         gaze * 4 +
         Math.max(-2, travel) -
         p.distance * 0.12 +
-        (candidate.kind === preferred ? 2 : 0) +
-        (candidate.kind === "weave" && Math.abs(latest.gaze[0]) > 0.28 ? 3 : 0);
+        (candidate.kind === preferred ? 3 : 0);
       if (rank > score || (rank === score && candidate.id < (best?.id ?? ""))) {
         best = candidate;
         score = rank;
@@ -133,6 +124,7 @@ export class DecisionGate {
       ]);
       if (controller.signal.aborted || generation !== this.generation)
         return { valid: false, candidate: null };
+      if (decision.hold) return { valid: false, candidate: null };
       const candidate =
         context.candidates.find((c) => c.id === decision.candidateId) ?? null;
       return {

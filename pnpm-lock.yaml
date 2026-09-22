@@ -162,8 +162,14 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+overrides:
+  '@dimforge/rapier3d-compat': 0.20.0
+
 patchedDependencies:
   '@react-three/drei@10.7.8': f3723aa1265102ef1b2a8af51c8143cbc2c74e345d403a26a670eb3ce9898435
+  '@react-three/fiber@9.7.0': 921fcfb18d817b8f25985b4b72d9c93402e20e69a151cae449949a56b58b3647
+  n8ao@2.0.1: 73ef3f7a5db269d9616b83672762d2456fecaf1c01389e3c6d407d13f276d213
+  three@0.186.0: 90838db84e8265c774fbb4b875e915907b5192c028a4c4fb95f8b4bce48084ad
 
 importers:
 
@@ -177,16 +183,16 @@ importers:
         version: 5.3.0
       '@react-three/drei':
         specifier: 10.7.8
-        version: 10.7.8(patch_hash=f3723aa1265102ef1b2a8af51c8143cbc2c74e345d403a26a670eb3ce9898435)(@react-three/fiber@9.7.0(@types/react@19.3.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.186.0))(@types/react@19.3.0)(@types/three@0.183.1)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.186.0)
+        version: 10.7.8(patch_hash=f3723aa1265102ef1b2a8af51c8143cbc2c74e345d403a26a670eb3ce9898435)(@react-three/fiber@9.7.0(patch_hash=921fcfb18d817b8f25985b4b72d9c93402e20e69a151cae449949a56b58b3647)(@types/react@19.3.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.186.0(patch_hash=90838db84e8265c774fbb4b875e915907b5192c028a4c4fb95f8b4bce48084ad)))(@types/react@19.3.0)(@types/three@0.183.1)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.186.0(patch_hash=90838db84e8265c774fbb4b875e915907b5192c028a4c4fb95f8b4bce48084ad))
       '@react-three/fiber':
         specifier: 9.7.0
-        version: 9.7.0(@types/react@19.3.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.186.0)
+        version: 9.7.0(patch_hash=921fcfb18d817b8f25985b4b72d9c93402e20e69a151cae449949a56b58b3647)(@types/react@19.3.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.186.0(patch_hash=90838db84e8265c774fbb4b875e915907b5192c028a4c4fb95f8b4bce48084ad))
       '@react-three/postprocessing':
         specifier: ^3.1.1
-        version: 3.1.1(@react-three/fiber@9.7.0(@types/react@19.3.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.186.0))(@types/three@0.183.1)(postprocessing@6.39.5(three@0.186.0))(react@19.2.8)(three@0.186.0)
+        version: 3.1.1(@react-three/fiber@9.7.0(patch_hash=921fcfb18d817b8f25985b4b72d9c93402e20e69a151cae449949a56b58b3647)(@types/react@19.3.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.186.0(patch_hash=90838db84e8265c774fbb4b875e915907b5192c028a4c4fb95f8b4bce48084ad)))(@types/three@0.183.1)(postprocessing@6.39.5(three@0.186.0(patch_hash=90838db84e8265c774fbb4b875e915907b5192c028a4c4fb95f8b4bce48084ad)))(react@19.2.8)(three@0.186.0(patch_hash=90838db84e8265c774fbb4b875e915907b5192c028a4c4fb95f8b4bce48084ad))
       '@react-three/rapier':
         specifier: 2.2.0
-        version: 2.2.0(@react-three/fiber@9.7.0(@types/react@19.3.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.186.0))(react@19.2.8)(three@0.186.0)
+        version: 2.2.0(@react-three/fiber@9.7.0(patch_hash=921fcfb18d817b8f25985b4b72d9c93402e20e69a151cae449949a56b58b3647)(@types/react@19.3.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.186.0(patch_hash=90838db84e8265c774fbb4b875e915907b5192c028a4c4fb95f8b4bce48084ad)))(react@19.2.8)(three@0.186.0(patch_hash=90838db84e8265c774fbb4b875e915907b5192c028a4c4fb95f8b4bce48084ad))
       '@typesafe-ai/sdk':
         specifier: ^0.6.0
         version: 0.6.0
@@ -201,7 +207,7 @@ importers:
         version: 19.2.8(react@19.2.8)
       three:
         specifier: 0.186.0
-        version: 0.186.0
+        version: 0.186.0(patch_hash=90838db84e8265c774fbb4b875e915907b5192c028a4c4fb95f8b4bce48084ad)
       zod:
         specifier: ^4.6.5
         version: 4.6.5
@@ -243,11 +249,8 @@ packages:
     resolution: {integrity: sha512-Nq8OhGWiZIZGV6hLHoyAKLLcJihP/xFeBMGJoUrxTX2psI8dCifzLhZISFb+VWS3wFMRDmCGw5R+dOySCqPLhw==}
     engines: {node: '>=6.9.0'}
 
-  '@dimforge/rapier3d-compat@0.12.0':
-    resolution: {integrity: sha512-uekIGetywIgopfD97oDL5PfeezkFpNhwlzlaEYNOA0N6ghdsOvh/HYjSMek5Q2O1PYvRSDFcqFVJl4r4ZBwOow==}
-
-  '@dimforge/rapier3d-compat@0.19.2':
-    resolution: {integrity: sha512-AZHL1jqUF55QJkJyU1yKeh4ImX2J93bVLIezT1+o0FZqTix6O06MOaqpKoJ4MmbDCsoZmwO+qc471/SDMDm2AA==}
+  '@dimforge/rapier3d-compat@0.20.0':
+    resolution: {integrity: sha512-X4W9pJBdGRX5CO3c/gUNjBFEFG2fn4nYxp9k8STdBDaLa0/w5XTW2ArpayS+9jGFojTi3uFSOWAElCd4rkpekA==}
 
   '@emnapi/runtime@1.11.3':
     resolution: {integrity: sha512-Xz4Tpyki7XyrpbUK1jR1AhdAdaXyhhY4lZ3neLodmhpuWfy2PAQN5B46sAiU4liOXGLkHypn/qU+jvfWSCYYLA==}
@@ -1514,9 +1517,7 @@ snapshots:
 
   '@babel/runtime@7.29.7': {}
 
-  '@dimforge/rapier3d-compat@0.12.0': {}
-
-  '@dimforge/rapier3d-compat@0.19.2': {}
+  '@dimforge/rapier3d-compat@0.20.0': {}
 
   '@emnapi/runtime@1.11.3':
     dependencies:
@@ -1714,10 +1715,10 @@ snapshots:
 
   '@mediapipe/tasks-vision@0.10.17': {}
 
-  '@monogrid/gainmap-js@3.4.0(three@0.186.0)':
+  '@monogrid/gainmap-js@3.4.0(three@0.186.0(patch_hash=90838db84e8265c774fbb4b875e915907b5192c028a4c4fb95f8b4bce48084ad))':
     dependencies:
       promise-worker-transferable: 1.0.4
-      three: 0.186.0
+      three: 0.186.0(patch_hash=90838db84e8265c774fbb4b875e915907b5192c028a4c4fb95f8b4bce48084ad)
 
   '@next/env@16.3.5': {}
 
@@ -1749,28 +1750,28 @@ snapshots:
     dependencies:
       playwright: 1.63.0
 
-  '@react-three/drei@10.7.8(patch_hash=f3723aa1265102ef1b2a8af51c8143cbc2c74e345d403a26a670eb3ce9898435)(@react-three/fiber@9.7.0(@types/react@19.3.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.186.0))(@types/react@19.3.0)(@types/three@0.183.1)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.186.0)':
+  '@react-three/drei@10.7.8(patch_hash=f3723aa1265102ef1b2a8af51c8143cbc2c74e345d403a26a670eb3ce9898435)(@react-three/fiber@9.7.0(patch_hash=921fcfb18d817b8f25985b4b72d9c93402e20e69a151cae449949a56b58b3647)(@types/react@19.3.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.186.0(patch_hash=90838db84e8265c774fbb4b875e915907b5192c028a4c4fb95f8b4bce48084ad)))(@types/react@19.3.0)(@types/three@0.183.1)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.186.0(patch_hash=90838db84e8265c774fbb4b875e915907b5192c028a4c4fb95f8b4bce48084ad))':
     dependencies:
       '@babel/runtime': 7.29.7
       '@mediapipe/tasks-vision': 0.10.17
-      '@monogrid/gainmap-js': 3.4.0(three@0.186.0)
-      '@react-three/fiber': 9.7.0(@types/react@19.3.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.186.0)
+      '@monogrid/gainmap-js': 3.4.0(three@0.186.0(patch_hash=90838db84e8265c774fbb4b875e915907b5192c028a4c4fb95f8b4bce48084ad))
+      '@react-three/fiber': 9.7.0(patch_hash=921fcfb18d817b8f25985b4b72d9c93402e20e69a151cae449949a56b58b3647)(@types/react@19.3.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.186.0(patch_hash=90838db84e8265c774fbb4b875e915907b5192c028a4c4fb95f8b4bce48084ad))
       '@use-gesture/react': 10.3.1(react@19.2.8)
-      camera-controls: 3.1.2(three@0.186.0)
+      camera-controls: 3.1.2(three@0.186.0(patch_hash=90838db84e8265c774fbb4b875e915907b5192c028a4c4fb95f8b4bce48084ad))
       cross-env: 7.0.3
       detect-gpu: 5.0.70
       glsl-noise: 0.0.0
       hls.js: 1.7.3
-      maath: 0.10.8(@types/three@0.183.1)(three@0.186.0)
-      meshline: 3.3.1(three@0.186.0)
+      maath: 0.10.8(@types/three@0.183.1)(three@0.186.0(patch_hash=90838db84e8265c774fbb4b875e915907b5192c028a4c4fb95f8b4bce48084ad))
+      meshline: 3.3.1(three@0.186.0(patch_hash=90838db84e8265c774fbb4b875e915907b5192c028a4c4fb95f8b4bce48084ad))
       react: 19.2.8
-      stats-gl: 2.4.2(@types/three@0.183.1)(three@0.186.0)
+      stats-gl: 2.4.2(@types/three@0.183.1)(three@0.186.0(patch_hash=90838db84e8265c774fbb4b875e915907b5192c028a4c4fb95f8b4bce48084ad))
       stats.js: 0.17.0
       suspend-react: 0.1.3(react@19.2.8)
-      three: 0.186.0
-      three-mesh-bvh: 0.8.3(three@0.186.0)
-      three-stdlib: 2.36.1(three@0.186.0)
-      troika-three-text: 0.52.5(three@0.186.0)
+      three: 0.186.0(patch_hash=90838db84e8265c774fbb4b875e915907b5192c028a4c4fb95f8b4bce48084ad)
+      three-mesh-bvh: 0.8.3(three@0.186.0(patch_hash=90838db84e8265c774fbb4b875e915907b5192c028a4c4fb95f8b4bce48084ad))
+      three-stdlib: 2.36.1(three@0.186.0(patch_hash=90838db84e8265c774fbb4b875e915907b5192c028a4c4fb95f8b4bce48084ad))
+      troika-three-text: 0.52.5(three@0.186.0(patch_hash=90838db84e8265c774fbb4b875e915907b5192c028a4c4fb95f8b4bce48084ad))
       tunnel-rat: 0.1.2(@types/react@19.3.0)(react@19.2.8)
       use-sync-external-store: 1.7.0(react@19.2.8)
       utility-types: 3.11.0
@@ -1782,7 +1783,7 @@ snapshots:
       - '@types/three'
       - immer
 
-  '@react-three/fiber@9.7.0(@types/react@19.3.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.186.0)':
+  '@react-three/fiber@9.7.0(patch_hash=921fcfb18d817b8f25985b4b72d9c93402e20e69a151cae449949a56b58b3647)(@types/react@19.3.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.186.0(patch_hash=90838db84e8265c774fbb4b875e915907b5192c028a4c4fb95f8b4bce48084ad))':
     dependencies:
       '@babel/runtime': 7.29.7
       '@types/webxr': 0.5.24
@@ -1793,7 +1794,7 @@ snapshots:
       react-use-measure: 2.1.7(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       scheduler: 0.27.0
       suspend-react: 0.1.3(react@19.2.8)
-      three: 0.186.0
+      three: 0.186.0(patch_hash=90838db84e8265c774fbb4b875e915907b5192c028a4c4fb95f8b4bce48084ad)
       use-sync-external-store: 1.7.0(react@19.2.8)
       zustand: 5.0.15(@types/react@19.3.0)(react@19.2.8)(use-sync-external-store@1.7.0(react@19.2.8))
     optionalDependencies:
@@ -1802,25 +1803,25 @@ snapshots:
       - '@types/react'
       - immer
 
-  '@react-three/postprocessing@3.1.1(@react-three/fiber@9.7.0(@types/react@19.3.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.186.0))(@types/three@0.183.1)(postprocessing@6.39.5(three@0.186.0))(react@19.2.8)(three@0.186.0)':
+  '@react-three/postprocessing@3.1.1(@react-three/fiber@9.7.0(patch_hash=921fcfb18d817b8f25985b4b72d9c93402e20e69a151cae449949a56b58b3647)(@types/react@19.3.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.186.0(patch_hash=90838db84e8265c774fbb4b875e915907b5192c028a4c4fb95f8b4bce48084ad)))(@types/three@0.183.1)(postprocessing@6.39.5(three@0.186.0(patch_hash=90838db84e8265c774fbb4b875e915907b5192c028a4c4fb95f8b4bce48084ad)))(react@19.2.8)(three@0.186.0(patch_hash=90838db84e8265c774fbb4b875e915907b5192c028a4c4fb95f8b4bce48084ad))':
     dependencies:
-      '@react-three/fiber': 9.7.0(@types/react@19.3.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.186.0)
-      maath: 0.10.8(@types/three@0.183.1)(three@0.186.0)
-      n8ao: 2.0.1(postprocessing@6.39.5(three@0.186.0))(three@0.186.0)
-      postprocessing: 6.39.5(three@0.186.0)
+      '@react-three/fiber': 9.7.0(patch_hash=921fcfb18d817b8f25985b4b72d9c93402e20e69a151cae449949a56b58b3647)(@types/react@19.3.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.186.0(patch_hash=90838db84e8265c774fbb4b875e915907b5192c028a4c4fb95f8b4bce48084ad))
+      maath: 0.10.8(@types/three@0.183.1)(three@0.186.0(patch_hash=90838db84e8265c774fbb4b875e915907b5192c028a4c4fb95f8b4bce48084ad))
+      n8ao: 2.0.1(patch_hash=73ef3f7a5db269d9616b83672762d2456fecaf1c01389e3c6d407d13f276d213)(postprocessing@6.39.5(three@0.186.0(patch_hash=90838db84e8265c774fbb4b875e915907b5192c028a4c4fb95f8b4bce48084ad)))(three@0.186.0(patch_hash=90838db84e8265c774fbb4b875e915907b5192c028a4c4fb95f8b4bce48084ad))
+      postprocessing: 6.39.5(three@0.186.0(patch_hash=90838db84e8265c774fbb4b875e915907b5192c028a4c4fb95f8b4bce48084ad))
       react: 19.2.8
-      three: 0.186.0
+      three: 0.186.0(patch_hash=90838db84e8265c774fbb4b875e915907b5192c028a4c4fb95f8b4bce48084ad)
     transitivePeerDependencies:
       - '@types/three'
 
-  '@react-three/rapier@2.2.0(@react-three/fiber@9.7.0(@types/react@19.3.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.186.0))(react@19.2.8)(three@0.186.0)':
+  '@react-three/rapier@2.2.0(@react-three/fiber@9.7.0(patch_hash=921fcfb18d817b8f25985b4b72d9c93402e20e69a151cae449949a56b58b3647)(@types/react@19.3.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.186.0(patch_hash=90838db84e8265c774fbb4b875e915907b5192c028a4c4fb95f8b4bce48084ad)))(react@19.2.8)(three@0.186.0(patch_hash=90838db84e8265c774fbb4b875e915907b5192c028a4c4fb95f8b4bce48084ad))':
     dependencies:
-      '@dimforge/rapier3d-compat': 0.19.2
-      '@react-three/fiber': 9.7.0(@types/react@19.3.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.186.0)
+      '@dimforge/rapier3d-compat': 0.20.0
+      '@react-three/fiber': 9.7.0(patch_hash=921fcfb18d817b8f25985b4b72d9c93402e20e69a151cae449949a56b58b3647)(@types/react@19.3.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.186.0(patch_hash=90838db84e8265c774fbb4b875e915907b5192c028a4c4fb95f8b4bce48084ad))
       react: 19.2.8
       suspend-react: 0.1.3(react@19.2.8)
-      three: 0.186.0
-      three-stdlib: 2.36.1(three@0.186.0)
+      three: 0.186.0(patch_hash=90838db84e8265c774fbb4b875e915907b5192c028a4c4fb95f8b4bce48084ad)
+      three-stdlib: 2.36.1(three@0.186.0(patch_hash=90838db84e8265c774fbb4b875e915907b5192c028a4c4fb95f8b4bce48084ad))
 
   '@swc/helpers@0.5.23':
     dependencies:
@@ -1852,7 +1853,7 @@ snapshots:
 
   '@types/three@0.183.1':
     dependencies:
-      '@dimforge/rapier3d-compat': 0.12.0
+      '@dimforge/rapier3d-compat': 0.20.0
       '@tweenjs/tween.js': 23.1.3
       '@types/stats.js': 0.17.4
       '@types/webxr': 0.5.24
@@ -1999,9 +2000,9 @@ snapshots:
 
   camelcase@7.0.1: {}
 
-  camera-controls@3.1.2(three@0.186.0):
+  camera-controls@3.1.2(three@0.186.0(patch_hash=90838db84e8265c774fbb4b875e915907b5192c028a4c4fb95f8b4bce48084ad)):
     dependencies:
-      three: 0.186.0
+      three: 0.186.0(patch_hash=90838db84e8265c774fbb4b875e915907b5192c028a4c4fb95f8b4bce48084ad)
 
   caniuse-lite@1.0.30001810: {}
 
@@ -2184,16 +2185,16 @@ snapshots:
     dependencies:
       immediate: 3.0.6
 
-  maath@0.10.8(@types/three@0.183.1)(three@0.186.0):
+  maath@0.10.8(@types/three@0.183.1)(three@0.186.0(patch_hash=90838db84e8265c774fbb4b875e915907b5192c028a4c4fb95f8b4bce48084ad)):
     dependencies:
       '@types/three': 0.183.1
-      three: 0.186.0
+      three: 0.186.0(patch_hash=90838db84e8265c774fbb4b875e915907b5192c028a4c4fb95f8b4bce48084ad)
 
   merge-stream@2.0.0: {}
 
-  meshline@3.3.1(three@0.186.0):
+  meshline@3.3.1(three@0.186.0(patch_hash=90838db84e8265c774fbb4b875e915907b5192c028a4c4fb95f8b4bce48084ad)):
     dependencies:
-      three: 0.186.0
+      three: 0.186.0(patch_hash=90838db84e8265c774fbb4b875e915907b5192c028a4c4fb95f8b4bce48084ad)
 
   meshoptimizer@1.0.1: {}
 
@@ -2215,10 +2216,10 @@ snapshots:
 
   ms@2.0.0: {}
 
-  n8ao@2.0.1(postprocessing@6.39.5(three@0.186.0))(three@0.186.0):
+  n8ao@2.0.1(patch_hash=73ef3f7a5db269d9616b83672762d2456fecaf1c01389e3c6d407d13f276d213)(postprocessing@6.39.5(three@0.186.0(patch_hash=90838db84e8265c774fbb4b875e915907b5192c028a4c4fb95f8b4bce48084ad)))(three@0.186.0(patch_hash=90838db84e8265c774fbb4b875e915907b5192c028a4c4fb95f8b4bce48084ad)):
     dependencies:
-      postprocessing: 6.39.5(three@0.186.0)
-      three: 0.186.0
+      postprocessing: 6.39.5(three@0.186.0(patch_hash=90838db84e8265c774fbb4b875e915907b5192c028a4c4fb95f8b4bce48084ad))
+      three: 0.186.0(patch_hash=90838db84e8265c774fbb4b875e915907b5192c028a4c4fb95f8b4bce48084ad)
 
   nanoid@3.3.19: {}
 
@@ -2280,9 +2281,9 @@ snapshots:
       picocolors: 1.1.1
       source-map-js: 1.2.1
 
-  postprocessing@6.39.5(three@0.186.0):
+  postprocessing@6.39.5(three@0.186.0(patch_hash=90838db84e8265c774fbb4b875e915907b5192c028a4c4fb95f8b4bce48084ad)):
     dependencies:
-      three: 0.186.0
+      three: 0.186.0(patch_hash=90838db84e8265c774fbb4b875e915907b5192c028a4c4fb95f8b4bce48084ad)
 
   potpack@1.0.2: {}
 
@@ -2401,10 +2402,10 @@ snapshots:
 
   source-map-js@1.2.1: {}
 
-  stats-gl@2.4.2(@types/three@0.183.1)(three@0.186.0):
+  stats-gl@2.4.2(@types/three@0.183.1)(three@0.186.0(patch_hash=90838db84e8265c774fbb4b875e915907b5192c028a4c4fb95f8b4bce48084ad)):
     dependencies:
       '@types/three': 0.183.1
-      three: 0.186.0
+      three: 0.186.0(patch_hash=90838db84e8265c774fbb4b875e915907b5192c028a4c4fb95f8b4bce48084ad)
 
   stats.js@0.17.0: {}
 
@@ -2445,11 +2446,11 @@ snapshots:
     dependencies:
       react: 19.2.8
 
-  three-mesh-bvh@0.8.3(three@0.186.0):
+  three-mesh-bvh@0.8.3(three@0.186.0(patch_hash=90838db84e8265c774fbb4b875e915907b5192c028a4c4fb95f8b4bce48084ad)):
     dependencies:
-      three: 0.186.0
+      three: 0.186.0(patch_hash=90838db84e8265c774fbb4b875e915907b5192c028a4c4fb95f8b4bce48084ad)
 
-  three-stdlib@2.36.1(three@0.186.0):
+  three-stdlib@2.36.1(three@0.186.0(patch_hash=90838db84e8265c774fbb4b875e915907b5192c028a4c4fb95f8b4bce48084ad)):
     dependencies:
       '@types/draco3d': 1.4.10
       '@types/offscreencanvas': 2019.7.3
@@ -2457,21 +2458,21 @@ snapshots:
       draco3d: 1.5.7
       fflate: 0.6.11
       potpack: 1.0.2
-      three: 0.186.0
+      three: 0.186.0(patch_hash=90838db84e8265c774fbb4b875e915907b5192c028a4c4fb95f8b4bce48084ad)
 
-  three@0.186.0: {}
+  three@0.186.0(patch_hash=90838db84e8265c774fbb4b875e915907b5192c028a4c4fb95f8b4bce48084ad): {}
 
-  troika-three-text@0.52.5(three@0.186.0):
+  troika-three-text@0.52.5(three@0.186.0(patch_hash=90838db84e8265c774fbb4b875e915907b5192c028a4c4fb95f8b4bce48084ad)):
     dependencies:
       bidi-js: 1.1.0
-      three: 0.186.0
-      troika-three-utils: 0.52.5(three@0.186.0)
+      three: 0.186.0(patch_hash=90838db84e8265c774fbb4b875e915907b5192c028a4c4fb95f8b4bce48084ad)
+      troika-three-utils: 0.52.5(three@0.186.0(patch_hash=90838db84e8265c774fbb4b875e915907b5192c028a4c4fb95f8b4bce48084ad))
       troika-worker-utils: 0.52.0
       webgl-sdf-generator: 1.1.1
 
-  troika-three-utils@0.52.5(three@0.186.0):
+  troika-three-utils@0.52.5(three@0.186.0(patch_hash=90838db84e8265c774fbb4b875e915907b5192c028a4c4fb95f8b4bce48084ad)):
     dependencies:
-      three: 0.186.0
+      three: 0.186.0(patch_hash=90838db84e8265c774fbb4b875e915907b5192c028a4c4fb95f8b4bce48084ad)
 
   troika-worker-utils@0.52.0: {}
 
