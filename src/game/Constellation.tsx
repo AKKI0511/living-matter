@@ -102,7 +102,12 @@ export function NightStars() {
   }, []);
   useEffect(() => () => geometry.dispose(), [geometry]);
   return (
-    <points geometry={geometry} visible={night} frustumCulled={false}>
+    <points
+      geometry={geometry}
+      visible={night}
+      frustumCulled={false}
+      renderOrder={-2}
+    >
       <shaderMaterial
         transparent
         depthWrite={false}

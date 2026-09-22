@@ -1,5 +1,6 @@
 import type { Candidate } from "./decisions";
 import { islands, sites, type Site, type Vec3 } from "./world";
+import { weaveRoute } from "./weave";
 
 export function onPermanentGround(p: Vec3) {
   return islands.some(
@@ -30,18 +31,23 @@ export function availableCandidates(
       Math.abs(position[1] - 0.825 - from[1]) > 2
     )
       return [];
-    return site.candidates.map((kind) => ({
-      id: `${site.id}:${kind}`,
-      siteId: site.id,
-      kind,
-      physical: {
-        from,
-        to,
-        distance,
-        span: Math.hypot(to[0] - from[0], to[2] - from[2]),
-        rise: to[1] - from[1],
-        medium: site.medium ?? "air",
-      },
-    }));
+    return site.candidates.flatMap((kind) =>
+      (kind === "weave" ? [-1, 0, 1] : [0]).map((bend) => ({
+        id: `${site.id}:${kind}${kind === "weave" ? `:${bend + 1}` : ""}`,
+        siteId: site.id,
+        kind,
+        ...(kind === "weave"
+          ? { route: weaveRoute(site, bend, from === site.end) }
+          : {}),
+        physical: {
+          from,
+          to,
+          distance,
+          span: Math.hypot(to[0] - from[0], to[2] - from[2]),
+          rise: to[1] - from[1],
+          medium: site.medium ?? "air",
+        },
+      })),
+    );
   });
 }

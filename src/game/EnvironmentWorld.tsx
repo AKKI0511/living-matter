@@ -19,6 +19,7 @@ import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeom
 import { islands } from "./world";
 import { useGame } from "./store";
 import { NightStars } from "./Constellation";
+import { BlackHole } from "./BlackHole";
 
 const stoneShader = (
   shader: Parameters<NonNullable<MeshStandardMaterial["onBeforeCompile"]>>[0],
@@ -271,6 +272,7 @@ export function Atmosphere() {
     <>
       <Sky />
       <NightStars />
+      <BlackHole />
       <fog attach="fog" args={[night ? "#0b162a" : "#afc2c4", 45, 290]} />
       <ambientLight
         intensity={night ? 0.18 : 0.12}

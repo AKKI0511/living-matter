@@ -1,5 +1,6 @@
 export type Vec3 = [number, number, number];
-export type FormationKind = "bridge" | "stairs" | "platform" | "floating-path";
+export type FormationKind =
+  "bridge" | "stairs" | "platform" | "floating-path" | "weave";
 export type StructureBox = { position: Vec3; size: Vec3; rotation?: Vec3 };
 export type Site = {
   id: string;
@@ -13,26 +14,26 @@ export const sites: Site[] = [
     id: "reach",
     start: [0, 0, -25],
     end: [0, 0, -45],
-    candidates: ["bridge", "platform"],
+    candidates: ["bridge", "platform", "weave"],
   },
   {
     id: "rise",
     start: [0, 0, -69],
     end: [0, 6, -85],
-    candidates: ["stairs", "platform"],
+    candidates: ["stairs", "platform", "weave"],
   },
   {
     id: "drift",
     start: [0, 6, -111],
     end: [0, 6, -133],
-    candidates: ["platform", "bridge"],
+    candidates: ["platform", "bridge", "weave"],
   },
   {
     id: "tide",
     medium: "water",
     start: [0, 6, -155],
     end: [0, 6, -183],
-    candidates: ["floating-path", "platform"],
+    candidates: ["floating-path", "platform", "weave"],
   },
 ];
 export const islands: StructureBox[] = [
@@ -51,7 +52,7 @@ export const PLAYER_HALF_HEIGHT = 0.48;
 
 export function structureBoxes(
   site: Site,
-  kind: FormationKind,
+  kind: Exclude<FormationKind, "weave">,
 ): StructureBox[] {
   const [x, y, z] = site.start;
   const length = z - site.end[2];
@@ -76,7 +77,7 @@ export function structureBoxes(
 
 export function collisionBoxes(
   site: Site,
-  kind: FormationKind,
+  kind: Exclude<FormationKind, "weave">,
 ): StructureBox[] {
   if (kind !== "stairs") return structureBoxes(site, kind);
   const rise = site.end[1] - site.start[1],
@@ -102,7 +103,7 @@ export function collisionBoxes(
 export type MatterPose = { position: Vec3; scale: Vec3 };
 export function formationPose(
   site: Site,
-  kind: FormationKind,
+  kind: Exclude<FormationKind, "weave">,
   index: number,
 ): MatterPose {
   const x = index % 8,

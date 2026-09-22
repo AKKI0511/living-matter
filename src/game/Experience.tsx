@@ -227,7 +227,9 @@ export default function Experience() {
           <div className="entry">
             {phase === "ready" && (
               <p className="preview-note">
-                Deterministic preview · built for an AI decision source
+                {process.env.NEXT_PUBLIC_DECISION_BACKEND === "jev"
+                  ? "Live intelligence · responds to how you move"
+                  : "Deterministic preview · responds to how you move"}
               </p>
             )}
             {phase === "loading" ? (

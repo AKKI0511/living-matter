@@ -10,7 +10,7 @@ import {
 test("every solid formation reaches both shores with traversable step heights", () => {
   for (const site of sites)
     for (const kind of site.candidates) {
-      if (kind === "platform") continue;
+      if (kind === "platform" || kind === "weave") continue;
       const boxes = structureBoxes(site, kind);
       const near = boxes[0],
         far = boxes.at(-1)!;
@@ -26,6 +26,7 @@ test("every solid formation reaches both shores with traversable step heights", 
 test("each finite matter unit lands inside its matching collision surface", () => {
   for (const site of sites)
     for (const kind of site.candidates) {
+      if (kind === "weave") continue;
       const boxes = structureBoxes(site, kind);
       for (let i = 0; i < MATTER_COUNT; i++) {
         const p = formationPose(site, kind, i);

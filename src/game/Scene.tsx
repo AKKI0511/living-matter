@@ -18,6 +18,7 @@ import { createRuntime, formMatter } from "./runtime";
 import { input } from "./input";
 import type { FormationKind, Vec3 } from "./world";
 import { sites } from "./world";
+import { weaveRoute } from "./weave";
 
 declare global {
   interface Window {
@@ -30,7 +31,7 @@ declare global {
         triangles: number;
       };
       teleport: (p: Vec3) => void;
-      formation: (site: number, kind: FormationKind) => void;
+      formation: (site: number, kind: FormationKind, bend?: number) => void;
       look: (yaw: number, pitch: number) => void;
     };
   }
@@ -71,6 +72,7 @@ function Simulation() {
             companion: runtime.companion,
             constellation: runtime.constellation.length,
             assistance: runtime.assistance,
+            weave: runtime.weave,
           };
         },
         renderInfo: () => ({
@@ -81,9 +83,17 @@ function Simulation() {
         teleport: (p) => {
           runtime.forcedPosition = p;
         },
-        formation: (i, kind) => {
+        formation: (i, kind, bend = 0) => {
           if (sites[i]?.candidates.includes(kind)) {
-            formMatter(runtime, i, kind);
+            formMatter(
+              runtime,
+              i,
+              kind,
+              false,
+              kind === "weave"
+                ? weaveRoute(sites[i], Math.max(-1, Math.min(1, bend)))
+                : undefined,
+            );
             runtime.manualFormation = true;
           }
         },

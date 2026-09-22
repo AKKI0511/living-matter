@@ -22,6 +22,7 @@ import {
   SPAWN,
 } from "./world";
 import type { Runtime } from "./runtime";
+import { guardWeaveEdge } from "./weave";
 
 export function Player({ runtime }: { runtime: Runtime }) {
   const body = useRef<RapierRigidBody>(null),
@@ -143,12 +144,24 @@ export function Player({ runtime }: { runtime: Runtime }) {
       m.airZ *= Math.exp(-0.35 * dt);
     }
     // Queries use the explicit formation admission set; inactive proxies must never become invisible support.
+    let movement: [number, number, number] = [
+      (m.x + m.airX) * dt + carryX,
+      m.y * dt + carryY,
+      (m.z + m.airZ) * dt + carryZ,
+    ];
+    if (runtime.weave && runtime.grounded && m.y <= 0)
+      movement = guardWeaveEdge(
+        runtime.weave,
+        [pos.x, pos.y, pos.z],
+        movement,
+        runtime.time,
+      );
     kcc.computeColliderMovement(
       col,
       {
-        x: (m.x + m.airX) * dt + carryX,
-        y: m.y * dt + carryY,
-        z: (m.z + m.airZ) * dt + carryZ,
+        x: movement[0],
+        y: movement[1],
+        z: movement[2],
       },
       rapier.QueryFilterFlags.EXCLUDE_SENSORS,
       undefined,

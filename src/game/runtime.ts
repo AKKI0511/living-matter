@@ -1,9 +1,10 @@
 import {
   DecisionGate,
-  ScenarioDecisions,
   type DecisionSource,
   type Observation,
 } from "./decisions";
+import { createDecisionSource } from "./decision-backend";
+import { createWeave, weaveRoute, type Weave } from "./weave";
 import { sites, SPAWN, type FormationKind, type Vec3 } from "./world";
 
 export type MatterState = {
@@ -15,9 +16,7 @@ export type MatterState = {
   previousOffset: Vec3;
   reverse: boolean;
 };
-export function createRuntime(
-  source: DecisionSource = new ScenarioDecisions(),
-) {
+export function createRuntime(source: DecisionSource = createDecisionSource()) {
   return {
     time: 0,
     player: [...SPAWN] as Vec3,
@@ -29,6 +28,8 @@ export function createRuntime(
     history: [] as Observation[],
     nextObservation: 0,
     activeSite: null as number | null,
+    activeCandidateId: null as string | null,
+    weave: null as Weave | null,
     revision: 0,
     manualFormation: false,
     companion: [-4, 2, -6] as Vec3,
@@ -65,6 +66,8 @@ export function formMatter(
   index: number,
   kind: FormationKind,
   reverse = false,
+  route?: Vec3[],
+  candidateId?: string,
 ) {
   runtime.gate.reset();
   runtime.states.forEach((s) => {
@@ -81,6 +84,11 @@ export function formMatter(
   });
   runtime.manualFormation = false;
   runtime.activeSite = index;
+  runtime.activeCandidateId = candidateId ?? `${sites[index].id}:${kind}`;
+  runtime.weave =
+    kind === "weave"
+      ? createWeave(route ?? weaveRoute(sites[index], 0, reverse), runtime.time)
+      : null;
   runtime.revision++;
   runtime.assistance.push({
     time: runtime.time,

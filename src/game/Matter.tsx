@@ -8,7 +8,14 @@ import {
   type RapierCollider,
   type RapierRigidBody,
 } from "@react-three/rapier";
-import { Color, DynamicDrawUsage, InstancedMesh, Object3D } from "three";
+import {
+  Color,
+  DynamicDrawUsage,
+  InstancedMesh,
+  Object3D,
+  Euler,
+  Quaternion,
+} from "three";
 import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
 import {
   FORMATION_SECONDS,
@@ -24,11 +31,31 @@ import { formMatter, type Runtime } from "./runtime";
 import { availableCandidates, onPermanentGround } from "./affordances";
 import { sound } from "./audio";
 import { useGame } from "./store";
+import {
+  applyWeave,
+  bankGeometry,
+  weaveBlend,
+  weaveCandidates,
+  weavePose,
+  WEAVE_SECONDS,
+  type WeaveBank,
+} from "./weave";
 
 export function Matter({ runtime }: { runtime: Runtime }) {
   const mesh = useRef<InstancedMesh>(null),
     body = useRef<RapierRigidBody>(null);
   const colliders = useRef<(RapierCollider | null)[]>([]);
+  const weaveColliders = useRef<(RapierCollider | null)[]>([]);
+  const bankVersions = useRef([-1, -1]);
+  const bankPoses = useRef<
+    ({
+      source: WeaveBank;
+      poses: ReturnType<typeof weavePose>[];
+      yaw: number;
+    } | null)[]
+  >([null, null]);
+  const bankQuaternion = useMemo(() => new Quaternion(), []);
+  const bankEuler = useMemo(() => new Euler(0, 0, 0, "YXZ"), []);
   const nextCheck = useRef(0),
     seenRevision = useRef(-1),
     transitionStart = useRef(0);
@@ -39,9 +66,11 @@ export function Matter({ runtime }: { runtime: Runtime }) {
   const boxes = useMemo(
     () =>
       sites.flatMap((site, index) =>
-        site.candidates.flatMap((kind) =>
-          collisionBoxes(site, kind).map((box) => ({ ...box, index, kind })),
-        ),
+        site.candidates
+          .filter((kind) => kind !== "weave")
+          .flatMap((kind) =>
+            collisionBoxes(site, kind).map((box) => ({ ...box, index, kind })),
+          ),
       ),
     [],
   );
@@ -49,12 +78,14 @@ export function Matter({ runtime }: { runtime: Runtime }) {
     () =>
       sites.map((site) =>
         Object.fromEntries(
-          site.candidates.map((kind) => [
-            kind,
-            Array.from({ length: MATTER_COUNT }, (_, i) =>
-              formationPose(site, kind, i),
-            ),
-          ]),
+          site.candidates
+            .filter((kind) => kind !== "weave")
+            .map((kind) => [
+              kind,
+              Array.from({ length: MATTER_COUNT }, (_, i) =>
+                formationPose(site, kind, i),
+              ),
+            ]),
         ),
       ),
     [],
@@ -115,9 +146,36 @@ export function Matter({ runtime }: { runtime: Runtime }) {
       runtime.matterColliderHandles.add(c.handle);
       const enabled =
         state?.phase === "active" &&
+        state.kind !== "weave" &&
         boxes[i].index === index &&
         boxes[i].kind === state.kind;
       c.setEnabled(enabled);
+      if (enabled) runtime.solidColliderHandles.add(c.handle);
+    });
+    weaveColliders.current.forEach((c, i) => {
+      if (!c) return;
+      runtime.matterColliderHandles.add(c.handle);
+      const bank = state?.kind === "weave" ? runtime.weave?.banks[i] : null;
+      const enabled =
+        !!bank &&
+        state?.phase === "active" &&
+        runtime.time - bank.since >= WEAVE_SECONDS;
+      c.setEnabled(enabled);
+      if (bank) {
+        const g = bankGeometry(bank);
+        bankQuaternion.setFromEuler(bankEuler.set(g.slope, g.yaw, 0, "YXZ"));
+        c.setHalfExtents({
+          x: 2.4,
+          y: 0.15,
+          z: Math.hypot(g.run, g.rise) / 2 + 0.15,
+        });
+        c.setTranslationWrtParent({
+          x: (bank.from[0] + bank.to[0]) / 2,
+          y: (bank.from[1] + bank.to[1]) / 2 + 0.06 - Math.cos(g.slope) * 0.15,
+          z: (bank.from[2] + bank.to[2]) / 2,
+        });
+        c.setRotationWrtParent(bankQuaternion);
+      }
       if (enabled) runtime.solidColliderHandles.add(c.handle);
     });
     const offset = state?.offset ?? [0, 0, 0];
@@ -139,6 +197,7 @@ export function Matter({ runtime }: { runtime: Runtime }) {
       origin.set(live);
       seenRevision.current = runtime.revision;
       transitionStart.current = runtime.time;
+      bankVersions.current = [-1, -1];
     }
     const p = runtime.player,
       companion = runtime.companion;
@@ -150,10 +209,38 @@ export function Matter({ runtime }: { runtime: Runtime }) {
       companion[a] += (desired[a] - companion[a]) * follow;
     const elapsed = runtime.time - transitionStart.current;
     const duration = state ? FORMATION_SECONDS : 1.8;
+    if (state?.kind === "weave")
+      runtime.weave?.banks.forEach((bank, i) => {
+        if (bankPoses.current[i]?.source !== bank)
+          bankPoses.current[i] = {
+            source: bank,
+            poses: Array.from({ length: 256 }, (_, index) =>
+              weavePose(bank, index),
+            ),
+            yaw: bankGeometry(bank).yaw,
+          };
+      });
     for (let i = 0; i < MATTER_COUNT; i++) {
-      const j = i * 6,
-        t = smooth((elapsed - ((i % 32) / 32) * 0.35) / (duration - 0.4));
-      const pose = state ? poses[index!][state.kind][i] : null;
+      const j = i * 6;
+      const bankIndex = Math.floor(i / 256);
+      const bank =
+        state?.kind === "weave" ? runtime.weave?.banks[bankIndex] : null;
+      if (bank && bankVersions.current[bankIndex] !== bank.version) {
+        origin.set(
+          live.subarray(bankIndex * 256 * 6, (bankIndex + 1) * 256 * 6),
+          bankIndex * 256 * 6,
+        );
+        bankVersions.current[bankIndex] = bank.version;
+      }
+      const t =
+        bank && bank.version > 0
+          ? weaveBlend(runtime.time, bank.since)
+          : smooth((elapsed - ((i % 32) / 32) * 0.35) / (duration - 0.4));
+      const pose = bank
+        ? bankPoses.current[bankIndex]!.poses[i % 256]
+        : state
+          ? poses[index!][state.kind][i]
+          : null;
       const wave =
         Math.sin(runtime.time * 0.8 + Math.floor(i / 64) * 0.3) * 0.055;
       const target = pose
@@ -179,7 +266,12 @@ export function Matter({ runtime }: { runtime: Runtime }) {
       dummy.scale.set(live[j + 3], live[j + 4], live[j + 5]);
       dummy.rotation.set(
         arc * Math.sin(i) * 0.45,
-        arc * 0.8 + (!state ? Math.sin(runtime.time * 0.5 + i / 64) * 0.06 : 0),
+        arc * 0.8 +
+          (bank
+            ? bankPoses.current[bankIndex]!.yaw * t
+            : !state
+              ? Math.sin(runtime.time * 0.5 + i / 64) * 0.06
+              : 0),
         arc * Math.cos(i) * 0.3,
       );
       dummy.updateMatrix();
@@ -192,6 +284,78 @@ export function Matter({ runtime }: { runtime: Runtime }) {
     )
       return;
     nextCheck.current = runtime.time + 0.3;
+    // While crossing, only an unoccupied half may be reallocated. No shore trigger or
+    // inferred intent here: every continuation is passed through the selected source.
+    if (
+      state?.kind === "weave" &&
+      state.phase === "active" &&
+      runtime.weave &&
+      runtime.grounded &&
+      !onPermanentGround(p)
+    ) {
+      const weave = runtime.weave;
+      const options = weaveCandidates(weave, sites[index!], p, runtime.time);
+      if (!options) return;
+      const revision = runtime.revision,
+        bankRevision = weave.revision;
+      const requestGaze = runtime.history.at(-1)?.gaze;
+      void runtime.gate
+        .requestResult({
+          observations: runtime.history.slice(),
+          objective: DESTINATION,
+          candidates: options.candidates,
+          current: { candidateId: runtime.activeCandidateId!, phase: "active" },
+          assistance: runtime.assistance.slice(),
+        })
+        .then((result) => {
+          if (
+            !result.valid ||
+            !result.candidate?.route ||
+            runtime.disposed ||
+            useGame.getState().phase !== "playing" ||
+            !runtime.grounded ||
+            runtime.revision !== revision ||
+            weave.revision !== bankRevision
+          )
+            return;
+          const fresh = weaveCandidates(
+            weave,
+            sites[index!],
+            runtime.player,
+            runtime.time,
+          );
+          if (
+            !fresh ||
+            fresh.bank !== options.bank ||
+            fresh.segment !== options.segment ||
+            !fresh.candidates.some((c) => c.id === result.candidate!.id)
+          )
+            return;
+          const gaze = runtime.history.at(-1)?.gaze;
+          if (
+            requestGaze &&
+            gaze &&
+            requestGaze.reduce((dot, v, a) => dot + v * gaze[a], 0) < 0.5
+          )
+            return;
+          applyWeave(
+            weave,
+            fresh.bank,
+            fresh.segment,
+            result.candidate.route,
+            runtime.time,
+          );
+          runtime.activeCandidateId = result.candidate.id;
+          runtime.assistance.push({
+            time: runtime.time,
+            candidateId: result.candidate.id,
+            outcome: "used",
+          });
+          if (runtime.assistance.length > 24) runtime.assistance.shift();
+          sound.transform();
+        });
+      return;
+    }
     // Only the engine's support/geometry checks constrain a decision. Behavior belongs to the source.
     if (!runtime.grounded || !onPermanentGround(p)) return;
     if (state && runtime.manualFormation) {
@@ -211,7 +375,9 @@ export function Matter({ runtime }: { runtime: Runtime }) {
         candidates,
         current: state
           ? {
-              candidateId: `${sites[index!].id}:${state.kind}`,
+              candidateId:
+                runtime.activeCandidateId ??
+                `${sites[index!].id}:${state.kind}`,
               phase: state.phase,
             }
           : undefined,
@@ -243,7 +409,22 @@ export function Matter({ runtime }: { runtime: Runtime }) {
         if (
           state &&
           choice?.siteId === sites[index!].id &&
-          choice.kind === state.kind
+          choice.kind === state.kind &&
+          (state.kind !== "weave" ||
+            runtime.weave?.banks.some(
+              (b) =>
+                b.segment ===
+                (Math.hypot(
+                  p[0] - runtime.weave!.route[0][0],
+                  p[2] - runtime.weave!.route[0][2],
+                ) <
+                Math.hypot(
+                  p[0] - runtime.weave!.route[4][0],
+                  p[2] - runtime.weave!.route[4][2],
+                )
+                  ? 0
+                  : 3),
+            ))
         )
           return;
         if (state) {
@@ -261,6 +442,8 @@ export function Matter({ runtime }: { runtime: Runtime }) {
           if (runtime.assistance.length > 24) runtime.assistance.shift();
           state.phase = "idle";
           runtime.activeSite = null;
+          runtime.weave = null;
+          runtime.activeCandidateId = null;
           runtime.revision++;
           runtime.gate.reset();
         }
@@ -271,6 +454,8 @@ export function Matter({ runtime }: { runtime: Runtime }) {
             i,
             choice.kind,
             valid.physical!.from === sites[i].end,
+            choice.route,
+            choice.id,
           );
           sound.transform();
         }
@@ -294,6 +479,15 @@ export function Matter({ runtime }: { runtime: Runtime }) {
         />
       </instancedMesh>
       <RigidBody ref={body} type="kinematicPosition" colliders={false}>
+        {[0, 1].map((i) => (
+          <CuboidCollider
+            key={`weave-${i}`}
+            ref={(c) => {
+              weaveColliders.current[i] = c;
+            }}
+            args={[2.4, 0.15, 3]}
+          />
+        ))}
         {boxes.map((box, i) => (
           <CuboidCollider
             key={i}

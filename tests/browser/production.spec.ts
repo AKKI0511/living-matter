@@ -1,11 +1,11 @@
 import { expect, test } from "@playwright/test";
 
-test("production export plays through without debug hooks or external services", async ({
+test("production preview plays through without debug hooks or external services", async ({
   page,
 }, info) => {
   test.skip(
     !process.env.PLAYTEST_URL,
-    "Set PLAYTEST_URL to a running production export.",
+    "Set PLAYTEST_URL to a running preview-mode production server.",
   );
   const errors: string[] = [],
     external: string[] = [];

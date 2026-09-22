@@ -12,6 +12,7 @@ export type Candidate = {
   id: string;
   siteId: string;
   kind: FormationKind;
+  route?: Vec3[];
   physical?: {
     from: Vec3;
     to: Vec3;
@@ -33,7 +34,10 @@ export type DecisionContext = {
     outcome: "offered" | "used" | "abandoned";
   }[];
 };
-export type Intervention = { candidateId: string | null };
+export type Intervention = {
+  candidateId: string | null;
+  recheckAfterMs?: number;
+};
 /** Selection is asynchronous; geometry, validation and execution remain in the engine. */
 export interface DecisionSource {
   select(context: DecisionContext, signal: AbortSignal): Promise<Intervention>;
@@ -55,14 +59,15 @@ export class ScenarioDecisions implements DecisionSource {
     for (const candidate of candidates) {
       const p = candidate.physical;
       if (!p) continue;
-      const dx = p.to[0] - latest.position[0],
-        dz = p.to[2] - latest.position[2],
+      const aim = candidate.route && p.span > 14 ? candidate.route[1] : p.to;
+      const dx = aim[0] - latest.position[0],
+        dz = aim[2] - latest.position[2],
         length = Math.hypot(dx, dz) || 1;
       const gaze = (latest.gaze[0] * dx + latest.gaze[2] * dz) / length;
       const travel =
         (latest.velocity[0] * dx + latest.velocity[2] * dz) / length;
       // Looking away and retreating can mean no help. Waiting and looking across can mean help.
-      if (gaze < 0.15 && travel < 0.3) continue;
+      if (gaze < 0.4 && travel < 0.3) continue;
       const jumping = observations.slice(-10).some((o) => o.velocity[1] > 2);
       const preferred =
         p.medium === "water"
@@ -78,7 +83,8 @@ export class ScenarioDecisions implements DecisionSource {
         gaze * 4 +
         Math.max(-2, travel) -
         p.distance * 0.12 +
-        (candidate.kind === preferred ? 2 : 0);
+        (candidate.kind === preferred ? 2 : 0) +
+        (candidate.kind === "weave" && Math.abs(latest.gaze[0]) > 0.28 ? 3 : 0);
       if (rank > score || (rank === score && candidate.id < (best?.id ?? ""))) {
         best = candidate;
         score = rank;
