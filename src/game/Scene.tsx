@@ -15,6 +15,7 @@ import { Constellation } from "./Constellation";
 import { Matter } from "./Matter";
 import { Atmosphere, World } from "./EnvironmentWorld";
 import { createRuntime, formMatter } from "./runtime";
+import { decisionAuditEnabled } from "./decision-audit-mode";
 import { input } from "./input";
 import type { FormationKind, Vec3 } from "./world";
 import { sites } from "./world";
@@ -43,6 +44,16 @@ function Simulation() {
   const runtime = useMemo(() => createRuntime(), []);
   const phase = useGame((s) => s.phase);
   useEffect(() => {
+    if (!decisionAuditEnabled() || phase !== "playing") return;
+    void fetch("/api/decision/session", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sessionId: runtime.sessionId }),
+    }).then((response) => {
+      if (!response.ok) console.warn("Live session audit could not start.");
+    }).catch(() => console.warn("Live session audit could not start."));
+  }, [phase, runtime]);
+  useEffect(() => {
     runtime.disposed = false;
     if (useGame.getState().phase === "loading")
       useGame.getState().setPhase("ready");
@@ -58,6 +69,7 @@ function Simulation() {
             }
           });
           return {
+            ...(decisionAuditEnabled() ? { sessionId: runtime.sessionId } : {}),
             matterMeshes,
             matterUnits,
             time: runtime.time,

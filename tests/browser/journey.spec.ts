@@ -34,7 +34,7 @@ async function walkTo(page: Page, z: number, timeout = 40_000) {
   }
 }
 
-test("a fresh player walks the whole route, rides the platform, finishes and restarts", async ({
+test("a fresh player walks the whole route, finishes and restarts", async ({
   page,
 }, info) => {
   const errors: string[] = [];
@@ -47,24 +47,23 @@ test("a fresh player walks the whole route, rides the platform, finishes and res
   await walkTo(page, -103);
   await page.screenshot({ path: info.outputPath("terrace.png") });
   expect((await snapshot(page)).recoveries).toBe(0);
-  // Wait for a safe boarding dwell, then board using ordinary movement.
-  await expect
-    .poll(
-      async () => {
-        const s = await snapshot(page),
-          p = s.states[2];
-        return p.phase === "active" && (s.time - p.rideSince) % 18 < 1;
-      },
-      { timeout: 25_000, intervals: [80] },
-    )
-    .toBe(true);
-  await walkTo(page, -112.3, 6000);
-  await expect
-    .poll(async () => (await snapshot(page)).player[2], {
-      timeout: 20_000,
-      intervals: [100],
-    })
-    .toBeLessThan(-128.8);
+  await expect.poll(async () => (await snapshot(page)).states[2].phase).toBe("active");
+  if ((await snapshot(page)).states[2].kind === "platform") {
+    // A moving deck must be boarded during its near-shore dwell.
+    await expect
+      .poll(
+        async () => {
+          const s = await snapshot(page), p = s.states[2];
+          return (s.time - p.rideSince) % 18 < 1;
+        },
+        { timeout: 25_000, intervals: [80] },
+      )
+      .toBe(true);
+    await walkTo(page, -112.3, 6000);
+    await expect.poll(async () => (await snapshot(page)).player[2], { timeout: 20_000, intervals: [100] }).toBeLessThan(-128.8);
+  } else {
+    await walkTo(page, -128.8);
+  }
   await page.screenshot({ path: info.outputPath("crossing.png") });
   expect((await snapshot(page)).grounded).toBe(true);
   await walkTo(page, -204, 40_000);

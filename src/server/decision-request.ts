@@ -1,287 +1,106 @@
 import { z } from "zod";
-import {
-  noul,
-  score,
-  type Question,
-  type SystemOneResult,
-} from "@typesafe-ai/sdk";
+import { choice, noul, type Question, type SystemOneResult } from "@typesafe-ai/sdk";
 import type { Intervention } from "@/game/decisions";
+import { describeCandidate } from "@/game/semantic";
 
-const vec = z.tuple([
-  z.number().finite().min(-2000).max(2000),
-  z.number().finite().min(-2000).max(2000),
-  z.number().finite().min(-2000).max(2000),
-]);
-const id = z
-  .string()
-  .min(1)
-  .max(140)
-  .regex(/^[a-zA-Z0-9:._-]+$/);
-export const decisionSchema = z.object({
-  generation: z.number().int().nonnegative(),
-  observations: z
-    .array(
-      z.object({
-        time: z.number().nonnegative(),
-        position: vec,
-        velocity: vec,
-        gaze: vec,
-        grounded: z.boolean(),
-        activeStructure: id.nullable(),
-      }),
-    )
-    .min(1)
-    .max(40),
-  candidates: z
-    .array(
-      z.object({
-        id,
-        siteId: id,
-        kind: z.enum([
-          "bridge",
-          "stairs",
-          "platform",
-          "floating-path",
-          "weave",
-        ]),
-        route: z.array(vec).min(2).max(6).optional(),
-        physical: z.object({
-          from: vec,
-          to: vec,
-          distance: z.number().nonnegative().max(2000),
-          span: z.number().nonnegative().max(2000),
-          rise: z.number().min(-100).max(100),
-          medium: z.enum(["air", "water"]),
-        }),
-      }),
-    )
-    .min(1)
-    .max(16),
-  objective: vec.optional(),
-  current: z.object({ candidateId: id, phase: z.string().max(24) }).optional(),
-  assistance: z
-    .array(
-      z.object({
-        time: z.number().nonnegative(),
-        candidateId: id,
-        outcome: z.enum(["offered", "used", "abandoned"]),
-      }),
-    )
-    .max(24)
-    .optional(),
+const vec = z.tuple([z.number().finite().min(-2000).max(2000), z.number().finite().min(-2000).max(2000), z.number().finite().min(-2000).max(2000)]);
+const id = z.string().min(1).max(140).regex(/^[a-zA-Z0-9:._-]+$/);
+const event = z.object({
+  support: z.string().min(1).max(80),
+  motion: z.string().min(1).max(100),
+  position_on_support: z.string().max(100).optional(),
+  facing_into: z.string().max(100).optional(),
+  surface_beyond_facing: z.string().max(120).optional(),
 });
-
+export const decisionSchema = z.object({
+  sessionId: z.uuid(),
+  generation: z.number().int().nonnegative(),
+  semantic: z.object({
+    player_now: event,
+    recent_behavior_oldest_to_newest: z.array(event).min(1).max(8),
+    matter_now: z.object({
+      state: z.enum(["idle", "forming", "active"]),
+      form: z.string().max(100).optional(),
+      player_supported_by_matter: z.boolean(),
+      occupied_section: z.string().max(120).optional(),
+      reusable_section: z.string().max(120).optional(),
+      reusable_section_relative_to_player: z.string().max(40).optional(),
+    }),
+  }),
+  observations: z.array(z.object({
+    time: z.number().nonnegative(), position: vec, velocity: vec, gaze: vec,
+    grounded: z.boolean(), activeStructure: id.nullable(),
+  })).min(1).max(40),
+  candidates: z.array(z.object({
+    id, siteId: id,
+    kind: z.enum(["bridge", "stairs", "platform", "floating-path", "weave"]),
+    route: z.array(vec).min(2).max(6).optional(),
+    physical: z.object({
+      from: vec, to: vec,
+      distance: z.number().nonnegative().max(2000),
+      span: z.number().nonnegative().max(2000),
+      rise: z.number().min(-100).max(100),
+      medium: z.enum(["air", "water"]),
+    }),
+  })).min(1).max(16),
+  current: z.object({ candidateId: id, phase: z.string().max(24) }).optional(),
+});
 type Context = z.infer<typeof decisionSchema>;
 type Answers = SystemOneResult<Record<string, Question>>["answers"];
-const rounded = (v: number) => Math.round(v * 10) / 10;
 
-function targetGroups(context: Context) {
-  const points: number[][] = [];
-  const indices = context.candidates.map((c) => {
-    let i = points.findIndex((p) => p.every((v, a) => v === c.physical.to[a]));
-    if (i < 0) {
-      i = points.length;
-      points.push(c.physical.to);
-    }
-    return i;
-  });
-  return { points, indices };
-}
-
-/** Independent snap judgments share one bounded state; code owns the decision. */
+/** Build exactly the state and independent questions sent to Jev. */
 export function buildDecisionRequest(context: Context) {
-  const latest = context.observations.at(-1)!;
-  const history = context.observations
-    .filter(
-      (o, i, all) =>
-        i % 4 === 0 ||
-        i === all.length - 1 ||
-        (o.velocity[1] > 2 && (all[i - 1]?.velocity[1] ?? 0) <= 2),
-    )
-    .slice(-14);
-  const groups = targetGroups(context);
-  const targets = groups.points.map((point) => ({
-    relativePosition: point.map((v, a) => rounded(v - latest.position[a])),
-    readings: history.map((o) => {
-      const dx = point[0] - o.position[0],
-        dz = point[2] - o.position[2],
-        distance = Math.hypot(dx, dz) || 1;
-      return {
-        ago: rounded(latest.time - o.time),
-        distance: rounded(distance),
-        gazeAlignment: rounded((o.gaze[0] * dx + o.gaze[2] * dz) / distance),
-        speedToward: rounded(
-          (o.velocity[0] * dx + o.velocity[2] * dz) / distance,
-        ),
-      };
-    }),
-  }));
-  const options = context.candidates.map((c, i) => ({
-    target: groups.indices[i],
-    kind: c.kind,
-    entryRelative: c.physical.from.map((v, a) =>
-      rounded(v - latest.position[a]),
-    ),
-    span: rounded(c.physical.span),
-    rise: rounded(c.physical.rise),
-    medium: c.physical.medium,
-    movement:
-      c.kind === "platform"
-        ? "Stand or walk on a deck that carries the player between shores."
-        : c.kind === "weave"
-          ? "Walk a path assembled in sections; the occupied half remains solid while the other half rebuilds ahead or behind."
-          : "Walk over a stationary structure.",
-    steps:
-      c.route?.slice(1).map((point, j) => {
-        const rise = point[1] - c.route![j][1];
-        return {
-          form:
-            Math.abs(rise) > 0.2
-              ? "stairs"
-              : c.physical.medium === "water"
-                ? "floating walkway"
-                : "bridge",
-          rise: rounded(rise),
-          sideways: rounded(point[0] - c.route![j][0]),
-          run: rounded(
-            Math.hypot(point[0] - c.route![j][0], point[2] - c.route![j][2]),
-          ),
-        };
-      }) ?? [],
-  }));
   const questions: Record<string, Question> = {
-    redirect: noul(
-      "Do the recent `observations` show the player changing their travel goal?",
-      {
-        true: "Recent movement and gaze depart from the earlier sustained direction.",
-        false:
-          "The same goal persists, including waiting for an unfinished crossing.",
-      },
-    ),
+    action_needed: noul({
+      question: "Does the recent physical behavior suggest that living matter should change now to support the direction the player is trying to continue?",
+      inspect: ["`player_now`", "`recent_behavior_oldest_to_newest`", "`matter_now`"],
+    }, {
+      true: "The recent behavior repeatedly presses into unsupported space, repeats a traversal attempt, waits at an unsupported edge after such behavior, or changes direction while on living matter toward space the current matter does not serve.",
+      false: "The player is moving normally on sufficient support, is only looking around, has settled into going elsewhere, or the current matter already supports the direction they are continuing.",
+    }),
+    best_candidate: choice({
+      question: "Assuming living matter should change now, which candidate best matches the player's recent direction and manner of movement?",
+      inspect: ["`player_now`", "`recent_behavior_oldest_to_newest`", "`matter_now`"],
+      focus: "Choose among the supplied physical actions.",
+    }, Object.fromEntries(context.candidates.map((candidate, i) => [
+      `candidate_${i}`,
+      describeCandidate(candidate, context.observations.at(-1)!, context.semantic.matter_now.player_supported_by_matter),
+    ]))),
   };
-  targets.forEach((_, i) => {
-    questions[`target_${i}`] = noul(
-      `Does the player's behavior in \`targets[${i}].readings\` and \`observations\` suggest they are trying to reach \`targets[${i}]\`?`,
-      {
-        true: "Sustained approach, repeated attempts, or waiting while facing this destination suggest trying to reach it. Returning is as valid as advancing.",
-        false:
-          "Looking past briefly, retreating, or exploring elsewhere without attempts toward this destination.",
-      },
-    );
-  });
-  options.forEach((_, i) => {
-    questions[`fit_${i}`] = score(
-      `How well does the mode of traversal in \`options[${i}].movement\` and \`options[${i}].steps\` match the player's movement pattern in \`observations\`?`,
-      [
-        "The mode contradicts the player's sustained movement pattern, such as requiring passive riding while they repeatedly try to walk onward.",
-        "There is no clear behavioral evidence for this mode of traversal.",
-        "The mode accommodates the player's current walking, waiting to ride, or attempts to gain height.",
-        "The mode directly accommodates a repeated, sustained pattern of walking onward, waiting to ride, or climbing attempts.",
-      ],
-    );
-  });
-  if (context.current)
-    questions.withdraw = noul(
-      "Does `observations` show the player abandoning the offered assistance in `current`?",
-      {
-        true: "They consistently move away from its destination or reject it after approaching.",
-        false:
-          "They use it, approach it, pause on it, or wait for the next section to assemble.",
-      },
-    );
-  return {
-    state: {
-      units:
-        "Coordinates and distances are metres; speed is metres/second. Gaze alignment ranges from -1 (away) to 1 (toward). These are physical measurements, not inferred intent.",
-      observations: history.map((o) => ({
-        ago: rounded(latest.time - o.time),
-        displacement: o.position.map((v, a) => rounded(v - latest.position[a])),
-        velocity: o.velocity.map(rounded),
-        gaze: o.gaze.map(rounded),
-        grounded: o.grounded,
-      })),
-      targets,
-      options,
-      current: context.current
-        ? {
-            kind: context.current.candidateId.split(":")[1],
-            phase: context.current.phase,
-            option: context.candidates.findIndex(
-              (c) => c.id === context.current!.candidateId,
-            ),
-          }
-        : null,
-      assistance:
-        context.assistance
-          ?.slice(-6)
-          .map((a) => ({
-            ago: rounded(latest.time - a.time),
-            kind: a.candidateId.split(":")[1],
-            outcome: a.outcome,
-          })) ?? [],
-    },
-    questions,
-  };
+  if (context.current && !context.semantic.matter_now.player_supported_by_matter)
+    questions.abandoned_current = noul({
+      question: "Has the player abandoned the currently offered living matter?",
+      inspect: ["`player_now`", "`recent_behavior_oldest_to_newest`", "`matter_now`"],
+    }, {
+      true: "The player is off the offered matter and the recent behavior continues away from using it.",
+      false: "The player is approaching it, returning to it, waiting for it, or otherwise still behaving as if they may use it.",
+    });
+  return { state: context.semantic, questions };
 }
 
-// Initial playtest policy, not calibrated model thresholds. Scores measure fit;
-// Noul values measure probability. Confidence is diagnostic, not a safety certificate.
 export const decisionPolicy = {
-  targetMinimum: 0.6,
-  fitMinimum: 0.45,
-  targetWeight: 0.7,
-  switchMargin: 0.1,
-  withdrawalMinimum: 0.8,
+  actionThreshold: 0.6,
+  choiceConfidenceThreshold: 0.3,
+  abandonThreshold: 0.8,
+  recheckAfterMs: 1800,
 };
-export function composeDecision(
-  context: Context,
-  answers: Answers,
-): Intervention {
+export function composeDecision(context: Context, answers: Answers): Intervention {
+  const request = buildDecisionRequest(context);
   const probability = (key: string) => {
-    const a = answers[key];
-    if (a?.type !== "noul" || !Number.isFinite(a.noul))
-      throw new Error("Missing probability judgment");
-    return Math.max(0, Math.min(1, a.noul));
+    const answer = answers[key];
+    if (answer?.type !== "noul" || !Number.isFinite(answer.noul) || answer.noul < 0 || answer.noul > 1)
+      throw new Error(`Missing ${key} judgment`);
+    return answer.noul;
   };
-  const fit = (key: string) => {
-    const a = answers[key];
-    if (a?.type !== "score" || !Number.isFinite(a.score))
-      throw new Error("Missing fit judgment");
-    return Math.max(0, Math.min(1, a.score / 3));
-  };
-  const { indices } = targetGroups(context);
-  const ranks = context.candidates
-    .map((c, i) => {
-      const target = probability(`target_${indices[i]}`),
-        method = fit(`fit_${i}`);
-      return {
-        candidate: c,
-        eligible:
-          target >= decisionPolicy.targetMinimum &&
-          method >= decisionPolicy.fitMinimum,
-        value:
-          target * decisionPolicy.targetWeight +
-          method * (1 - decisionPolicy.targetWeight),
-      };
-    })
-    .filter((c) => c.eligible)
-    .sort(
-      (a, b) =>
-        b.value - a.value ||
-        Number(b.candidate.kind === "weave") -
-          Number(a.candidate.kind === "weave"),
-    );
-  const recheckAfterMs = probability("redirect") > 0.6 ? 1500 : 6000;
-  const current = ranks.find(
-    (r) => r.candidate.id === context.current?.candidateId,
-  );
-  if (current && ranks[0].value - current.value < decisionPolicy.switchMargin)
-    return { candidateId: current.candidate.id, recheckAfterMs };
-  if (ranks[0]) return { candidateId: ranks[0].candidate.id, recheckAfterMs };
-  if (context.current) {
-    if (probability("withdraw") >= decisionPolicy.withdrawalMinimum)
-      return { candidateId: null, recheckAfterMs };
-    return { candidateId: null, hold: true, recheckAfterMs };
-  }
-  return { candidateId: null, recheckAfterMs };
+  const hold = { candidateId: null, hold: true, recheckAfterMs: decisionPolicy.recheckAfterMs };
+  if (request.questions.abandoned_current && probability("abandoned_current") >= decisionPolicy.abandonThreshold)
+    return { candidateId: null, recheckAfterMs: decisionPolicy.recheckAfterMs };
+  if (probability("action_needed") < decisionPolicy.actionThreshold) return hold;
+  const answer = answers.best_candidate;
+  if (answer?.type !== "choice" || !Number.isFinite(answer.confidence) || answer.confidence < decisionPolicy.choiceConfidenceThreshold)
+    return hold;
+  const match = /^candidate_(\d+)$/.exec(answer.choice);
+  const index = match ? Number(match[1]) : -1;
+  if (index < 0 || index >= context.candidates.length) return hold;
+  return { candidateId: context.candidates[index].id, recheckAfterMs: decisionPolicy.recheckAfterMs };
 }

@@ -11,4 +11,5 @@ playwright-report/
 *.tsbuildinfo
 .DS_Store
 artifacts/
+jev-sessions/
 skills-lock.json

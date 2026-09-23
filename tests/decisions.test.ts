@@ -83,3 +83,16 @@ test("explicit no-intervention differs from an unavailable provider", async () =
     candidate: null,
   });
 });
+
+test("the gate retains a live audit ID when the judgment holds", async () => {
+  const gate = new DecisionGate({
+    select: async () => ({ candidateId: null, hold: true, auditId: "call-id", browserRoundTripMs: 212 }),
+  });
+  assert.deepEqual(await gate.requestResult(context), {
+    valid: false,
+    candidate: null,
+    auditId: "call-id",
+    browserRoundTripMs: 212,
+    gateStatus: "hold",
+  });
+});

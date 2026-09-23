@@ -13,7 +13,8 @@
     "start": "next start --hostname 0.0.0.0",
     "typecheck": "next typegen && tsc --noEmit",
     "test": "tsx --test tests/*.test.ts",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "jev:sessions": "tsx scripts/jev-sessions.ts"
   },
   "dependencies": {
     "@fontsource-variable/dm-sans": "^5.3.0",
