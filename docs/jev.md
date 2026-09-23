@@ -1,6 +1,6 @@
 # Living Matter with Jev
 
-[Setup](../README.md#play-with-jev) · [Architecture](architecture.md) · [Playground reference runs](jev-playground-runs.md) · [Live session audits](jev-session-audits.md)
+[Setup](../README.md#play-with-jev) · [Architecture](architecture.md) · [TypeSafe playground](jev-playground-runs.md) · [Live session audits](jev-session-audits.md)
 
 The game records a short history of physical events: movement, jumps, landings, support, edges, and what lies in the player's current facing direction. The directions Jev sees are relative to the player. Candidate matter actions are generated and checked by the game.
 

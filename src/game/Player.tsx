@@ -267,8 +267,9 @@ export function Player({ runtime }: { runtime: Runtime }) {
         activeStructure: activeIndex < 0 ? null : sites[activeIndex].id,
       } as const;
       runtime.history.push({ ...observation, position: [...observation.position], velocity: [...observation.velocity], gaze: [...observation.gaze] });
-      runtime.physicalHistory.record(runtime.history.at(-1)!, physicalScene(runtime), runtime.recoveries > runtime.recordedRecoveries);
-      runtime.recordedRecoveries = runtime.recoveries;
+      const recovered = runtime.recoveries > runtime.recordedRecoveries;
+      runtime.physicalHistory.record(runtime.history.at(-1)!, physicalScene(runtime), recovered);
+      if (grounded) runtime.recordedRecoveries = runtime.recoveries;
       if (runtime.history.length > 40) runtime.history.shift();
       const last = runtime.constellation.at(-1);
       if (

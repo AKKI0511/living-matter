@@ -89,21 +89,18 @@ export async function POST(request: Request) {
       failure = error;
     }
     if (auditCall) {
-      try {
-        await completeJevCall(auditCall, {
-          providerRoundTripMs: performance.now() - providerStarted,
-          response: response as unknown as Record<string, unknown> | undefined,
-          decision,
-          ...(failure ? { error: {
-            name: failure instanceof Error ? failure.name : "UnknownError",
-            status: typeof failure === "object" && failure && "status" in failure ? failure.status : null,
-            provider_request_id: providerRequestId ?? (typeof failure === "object" && failure && "requestId" in failure ? failure.requestId : null),
-          } } : {}),
-        });
-      } catch {
+      void completeJevCall(auditCall, {
+        providerRoundTripMs: performance.now() - providerStarted,
+        response: response as unknown as Record<string, unknown> | undefined,
+        decision,
+        ...(failure ? { error: {
+          name: failure instanceof Error ? failure.name : "UnknownError",
+          status: typeof failure === "object" && failure && "status" in failure ? failure.status : null,
+          provider_request_id: providerRequestId ?? (typeof failure === "object" && failure && "requestId" in failure ? failure.requestId : null),
+        } } : {}),
+      }).catch(() => {
         console.warn("[decisions] Jev answered but the audit could not be completed.");
-        return reply({ error: "Decision audit unavailable" }, 503);
-      }
+      });
     }
     if (failure || !response || !decision) {
       console.warn("[decisions] Provider unavailable; verify key, model, quota and connectivity.");

@@ -69,6 +69,27 @@ test("physical history is event based and preserves attempts before waiting", ()
   assert.equal(JSON.stringify(buildDecisionRequest(context).state).includes("-23"), false);
 });
 
+test("a jump that recovers while airborne is recorded as falling and returning on landing", () => {
+  const history = new PhysicalHistory();
+  const scene = { time: 0, activeSite: null, phase: "idle" as const, weave: null };
+  let recoveries = 0;
+  let recordedRecoveries = 0;
+  const record = (sample: Observation) => {
+    const recovered = recoveries > recordedRecoveries;
+    history.record(sample, scene, recovered);
+    if (sample.grounded) recordedRecoveries = recoveries;
+  };
+  record(observation([0, 0.825, -23], [0, 0, 0], [0, 0, -1], 1));
+  record(observation([0, 1.8, -24], [0, 4, -2], [0, 0, -1], 2, false));
+  recoveries++;
+  record(observation([0, 0.2, -25], [0, -6, -1], [0, 0, -1], 3, false));
+  const landing = observation([0, 0.825, -19], [0, 0, 0], [0, 0, -1], 4);
+  record(landing);
+  const events = history.snapshot(describePhysical(landing, scene));
+  assert.ok(events.some((event) => event.motion === "fell off the support and returned"));
+  assert.equal(events.some((event) => event.motion === "jumped and landed back on the same support"), false);
+});
+
 test("Jev receives one action Noul and one candidate Choice with no authored directions", () => {
   const request = buildDecisionRequest(reachContext());
   assert.deepEqual(Object.keys(request.questions), ["action_needed", "best_candidate"]);
