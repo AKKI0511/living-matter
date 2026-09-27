@@ -162,7 +162,7 @@ export default function Scene() {
     <Canvas
       frameloop={phase === "playing" ? "always" : "demand"}
       shadows={quality === "high" ? "percentage" : false}
-      dpr={quality === "high" ? [1, 1.5] : 1}
+      dpr={quality === "high" ? [0.5, 1.5] : [0.5, 1]}
       camera={{ fov: 66, near: 0.08, far: 900, position: [0, 1.8, 1] }}
       gl={{
         antialias: true,
