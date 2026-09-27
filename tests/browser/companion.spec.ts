@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, observeJump, test, type Page } from "./fixtures";
 const snap = (page: Page) =>
   page.evaluate(
     () =>
@@ -40,6 +40,13 @@ async function walk(page: Page, z: number, direction = "w") {
   }
 }
 
+async function simulateFor(page: Page, seconds: number) {
+  const until = (await snap(page)).time + seconds;
+  await page.waitForFunction((until) =>
+    (window.__livingMatter!.snapshot() as { time: number }).time >= until,
+  until, { polling: "raf", timeout: 12000 });
+}
+
 test("free movement relative to a travelling platform, including reversing and jumping", async ({
   page,
 }) => {
@@ -63,32 +70,31 @@ test("free movement relative to a travelling platform, including reversing and j
   };
   let before = await relative();
   await page.keyboard.down("d");
-  await page.waitForTimeout(280);
+  await simulateFor(page, 0.28);
   await page.keyboard.up("d");
   let after = await relative();
   expect(after[0] - before[0]).toBeGreaterThan(0.6);
   before = await relative();
   await page.keyboard.down("a");
-  await page.waitForTimeout(400);
+  await simulateFor(page, 0.4);
   await page.keyboard.up("a");
   after = await relative();
   expect(after[0] - before[0]).toBeLessThan(-0.6);
   before = await relative();
   await page.keyboard.down("s");
-  await page.waitForTimeout(250);
+  await simulateFor(page, 0.25);
   await page.keyboard.up("s");
   after = await relative();
   expect(after[1] - before[1]).toBeGreaterThan(0.45);
   before = await relative();
   await page.keyboard.down("w");
-  await page.waitForTimeout(350);
+  await simulateFor(page, 0.35);
   await page.keyboard.up("w");
   after = await relative();
   expect(after[1] - before[1]).toBeLessThan(-0.5);
+  const jumped = observeJump(page);
   await page.keyboard.press("Space");
-  await expect
-    .poll(async () => (await snap(page)).grounded, { intervals: [30] })
-    .toBe(false);
+  await jumped;
   await expect.poll(async () => (await snap(page)).grounded).toBe(true);
   expect((await snap(page)).recoveries).toBe(0);
 });
@@ -152,6 +158,8 @@ test("the same platform can collect a player from the far shore and return", asy
   await page.evaluate(() => {
     window.__livingMatter!.teleport([0, 7, -141]);
     window.__livingMatter!.look(Math.PI, 0);
+    // This test exercises reverse platform transport, independent of selection.
+    window.__livingMatter!.formation(2, "platform", 0, true);
   });
   await expect
     .poll(async () => (await snap(page)).states[2].phase)

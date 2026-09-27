@@ -15,6 +15,7 @@ import { Constellation } from "./Constellation";
 import { Matter } from "./Matter";
 import { Atmosphere, World } from "./EnvironmentWorld";
 import { createRuntime, formMatter } from "./runtime";
+import { decisionAuditEnabled } from "./decision-audit-mode";
 import { input } from "./input";
 import type { FormationKind, Vec3 } from "./world";
 import { sites } from "./world";
@@ -31,7 +32,7 @@ declare global {
         triangles: number;
       };
       teleport: (p: Vec3) => void;
-      formation: (site: number, kind: FormationKind, bend?: number) => void;
+      formation: (site: number, kind: FormationKind, bend?: number, reverse?: boolean) => void;
       look: (yaw: number, pitch: number) => void;
     };
   }
@@ -42,6 +43,16 @@ function Simulation() {
   const scene = useThree((s) => s.scene);
   const runtime = useMemo(() => createRuntime(), []);
   const phase = useGame((s) => s.phase);
+  useEffect(() => {
+    if (!decisionAuditEnabled() || phase !== "playing") return;
+    void fetch("/api/decision/session", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sessionId: runtime.sessionId }),
+    }).then((response) => {
+      if (!response.ok) console.warn("Live session audit could not start.");
+    }).catch(() => console.warn("Live session audit could not start."));
+  }, [phase, runtime]);
   useEffect(() => {
     runtime.disposed = false;
     if (useGame.getState().phase === "loading")
@@ -58,6 +69,7 @@ function Simulation() {
             }
           });
           return {
+            ...(decisionAuditEnabled() ? { sessionId: runtime.sessionId } : {}),
             matterMeshes,
             matterUnits,
             time: runtime.time,
@@ -83,15 +95,15 @@ function Simulation() {
         teleport: (p) => {
           runtime.forcedPosition = p;
         },
-        formation: (i, kind, bend = 0) => {
+        formation: (i, kind, bend = 0, reverse = false) => {
           if (sites[i]?.candidates.includes(kind)) {
             formMatter(
               runtime,
               i,
               kind,
-              false,
+              reverse,
               kind === "weave"
-                ? weaveRoute(sites[i], Math.max(-1, Math.min(1, bend)))
+                ? weaveRoute(sites[i], Math.max(-1, Math.min(1, bend)), reverse)
                 : undefined,
             );
             runtime.manualFormation = true;
@@ -150,7 +162,7 @@ export default function Scene() {
     <Canvas
       frameloop={phase === "playing" ? "always" : "demand"}
       shadows={quality === "high" ? "percentage" : false}
-      dpr={quality === "high" ? [1, 1.5] : 1}
+      dpr={quality === "high" ? [0.5, 1.5] : [0.5, 1]}
       camera={{ fov: 66, near: 0.08, far: 900, position: [0, 1.8, 1] }}
       gl={{
         antialias: true,

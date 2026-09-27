@@ -1,9 +1,11 @@
-import { TypeSafeClient } from "@typesafe-ai/sdk";
+import { TypeSafeClient, type Question, type SystemOneResult } from "@typesafe-ai/sdk";
 import {
   buildDecisionRequest,
   composeDecision,
   decisionSchema,
 } from "@/server/decision-request";
+import { beginJevCall, completeJevCall } from "@/server/jev-audit";
+import { decisionAuditEnabled } from "@/game/decision-audit-mode";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -56,23 +58,65 @@ export async function POST(request: Request) {
   inFlight++;
   requests++;
   try {
-    client ??= new TypeSafeClient({
-      timeout: 1600,
-      retry: { maxRetries: 0 },
-      logLevel: "off",
-    });
-    const response = await client.systemOne(buildDecisionRequest(parsed.data), {
-      signal: request.signal,
-    });
-    const decision = composeDecision(parsed.data, response.answers);
-    if (process.env.NODE_ENV === "development")
+    const jevRequest = buildDecisionRequest(parsed.data);
+    const requestedModel = process.env.TYPESAFE_DEFAULT_MODEL?.trim() || "jev-latest";
+    const auditEnabled = decisionAuditEnabled();
+    let auditCall: Awaited<ReturnType<typeof beginJevCall>> | undefined;
+    if (auditEnabled) {
+      try {
+        auditCall = await beginJevCall(parsed.data.sessionId, { model: requestedModel, ...jevRequest }, parsed.data);
+      } catch {
+        console.warn("[decisions] Audit storage unavailable; no Jev request was sent.");
+        return reply({ error: "Decision audit unavailable" }, 503);
+      }
+    }
+    let response: SystemOneResult<Record<string, Question>> | undefined;
+    let decision: ReturnType<typeof composeDecision> | undefined;
+    let failure: unknown;
+    let providerRequestId: string | undefined;
+    const providerStarted = performance.now();
+    try {
+      client ??= new TypeSafeClient({
+        timeout: 1600,
+        retry: { maxRetries: 0 },
+        logLevel: "off",
+      });
+      const result = await client.systemOne({ model: requestedModel, ...jevRequest }, { signal: request.signal }).withResponse();
+      response = result.data;
+      providerRequestId = result.requestId;
+      decision = composeDecision(parsed.data, response.answers);
+    } catch (error) {
+      failure = error;
+    }
+    if (auditCall) {
+      await completeJevCall(auditCall, {
+        providerRoundTripMs: performance.now() - providerStarted,
+        providerRequestId,
+        response: response as unknown as Record<string, unknown> | undefined,
+        decision,
+        ...(failure ? { error: {
+          name: failure instanceof Error ? failure.name : "UnknownError",
+          status: typeof failure === "object" && failure && "status" in failure ? failure.status : null,
+          provider_request_id: providerRequestId ?? (typeof failure === "object" && failure && "requestId" in failure ? failure.requestId : null),
+        } } : {}),
+      }).catch(() => {
+        console.warn("[decisions] Jev answered but the audit could not be completed.");
+        throw new Error("Decision audit unavailable");
+      });
+    }
+    if (failure || !response || !decision) {
+      console.warn("[decisions] Provider unavailable; verify key, model, quota and connectivity.");
+      return reply({ error: "Decision provider unavailable" }, 502);
+    }
+    if (auditCall)
       console.info("[decisions]", {
         model: response.model,
         usage: response.usage,
         decision,
         judgments: response.answers,
+        auditId: auditCall.callId,
       });
-    return reply(decision);
+    return reply(auditCall ? { ...decision, auditId: auditCall.callId } : decision);
   } catch {
     // Never return a fabricated model decision, or leak SDK request headers/errors.
     console.warn(

@@ -19,7 +19,6 @@ import {
 import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
 import {
   FORMATION_SECONDS,
-  DESTINATION,
   MATTER_COUNT,
   collisionBoxes,
   formationPose,
@@ -27,9 +26,10 @@ import {
   sites,
   smooth,
 } from "./world";
-import { formMatter, type Runtime } from "./runtime";
+import { formMatter, semanticSnapshot, type Runtime } from "./runtime";
 import { availableCandidates, onPermanentGround } from "./affordances";
 import { sound } from "./audio";
+import { reportDecisionOutcome } from "./decision-audit-client";
 import { useGame } from "./store";
 import {
   applyWeave,
@@ -298,16 +298,23 @@ export function Matter({ runtime }: { runtime: Runtime }) {
       if (!options) return;
       const revision = runtime.revision,
         bankRevision = weave.revision;
+      const semantic = semanticSnapshot(runtime);
+      if (!semantic) return;
+      const eventRevision = runtime.physicalHistory.revision;
       const requestGaze = runtime.history.at(-1)?.gaze;
       void runtime.gate
         .requestResult({
+          sessionId: runtime.sessionId,
           observations: runtime.history.slice(),
-          objective: DESTINATION,
+          semantic,
           candidates: options.candidates,
           current: { candidateId: runtime.activeCandidateId!, phase: "active" },
           assistance: runtime.assistance.slice(),
         })
         .then((result) => {
+          let outcome: "applied" | "held" | "discarded" = result.gateStatus === "hold" ? "held" : "discarded";
+          let reason = result.gateStatus ?? "state_or_geometry_changed";
+          try {
           if (
             !result.valid ||
             !result.candidate?.route ||
@@ -315,7 +322,8 @@ export function Matter({ runtime }: { runtime: Runtime }) {
             useGame.getState().phase !== "playing" ||
             !runtime.grounded ||
             runtime.revision !== revision ||
-            weave.revision !== bankRevision
+            weave.revision !== bankRevision ||
+            runtime.physicalHistory.revision !== eventRevision
           )
             return;
           const fresh = weaveCandidates(
@@ -353,6 +361,11 @@ export function Matter({ runtime }: { runtime: Runtime }) {
           });
           if (runtime.assistance.length > 24) runtime.assistance.shift();
           sound.transform();
+          outcome = "applied";
+          reason = "recycled_unoccupied_section";
+          } finally {
+            reportDecisionOutcome(runtime.sessionId, result.auditId, result.browserRoundTripMs, outcome, reason);
+          }
         });
       return;
     }
@@ -367,11 +380,17 @@ export function Matter({ runtime }: { runtime: Runtime }) {
     }
     const candidates = availableCandidates(p),
       revision = runtime.revision;
+    if (!candidates.length) return;
+    const semantic = semanticSnapshot(runtime);
+    if (!semantic) return;
+    if (state && semantic.matter_now.player_supported_by_matter) return;
+    const eventRevision = runtime.physicalHistory.revision;
     const requestGaze = runtime.history.at(-1)?.gaze;
     void runtime.gate
       .requestResult({
+        sessionId: runtime.sessionId,
         observations: runtime.history.slice(),
-        objective: DESTINATION,
+        semantic,
         candidates,
         current: state
           ? {
@@ -384,13 +403,18 @@ export function Matter({ runtime }: { runtime: Runtime }) {
         assistance: runtime.assistance.slice(),
       })
       .then((result) => {
+        let outcome: "applied" | "retracted" | "held" | "discarded" = result.gateStatus === "hold" ? "held" : "discarded";
+        let reason = result.gateStatus ?? "state_or_geometry_changed";
+        try {
         if (
           !result.valid ||
           runtime.disposed ||
           useGame.getState().phase !== "playing" ||
           runtime.revision !== revision ||
+          runtime.physicalHistory.revision !== eventRevision ||
           !runtime.grounded ||
-          !onPermanentGround(runtime.player)
+          !onPermanentGround(runtime.player) ||
+          (state && semanticSnapshot(runtime)?.matter_now.player_supported_by_matter)
         )
           return;
         const currentGaze = runtime.history.at(-1)?.gaze;
@@ -426,7 +450,11 @@ export function Matter({ runtime }: { runtime: Runtime }) {
                   : 3),
             ))
         )
+        {
+          outcome = "held";
+          reason = "existing_form_sufficient";
           return;
+        }
         if (state) {
           const site = sites[index!],
             goal = state.reverse ? site.start : site.end,
@@ -446,6 +474,8 @@ export function Matter({ runtime }: { runtime: Runtime }) {
           runtime.activeCandidateId = null;
           runtime.revision++;
           runtime.gate.reset();
+          outcome = "retracted";
+          reason = "assistance_retracted";
         }
         if (choice && valid) {
           const i = sites.findIndex((s) => s.id === choice.siteId);
@@ -458,6 +488,15 @@ export function Matter({ runtime }: { runtime: Runtime }) {
             choice.id,
           );
           sound.transform();
+          outcome = "applied";
+          reason = "form_created";
+        }
+        if (!choice && !state && result.valid) {
+          outcome = "held";
+          reason = "no_intervention";
+        }
+        } finally {
+          reportDecisionOutcome(runtime.sessionId, result.auditId, result.browserRoundTripMs, outcome, reason);
         }
       });
   });

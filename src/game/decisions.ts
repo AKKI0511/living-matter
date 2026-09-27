@@ -1,4 +1,5 @@
 import type { FormationKind, Vec3 } from "./world";
+import type { SemanticState } from "./semantic";
 
 export type Observation = {
   time: number;
@@ -23,7 +24,9 @@ export type Candidate = {
   };
 };
 export type DecisionContext = {
+  sessionId?: string;
   observations: readonly Observation[];
+  semantic?: SemanticState;
   candidates: readonly Candidate[];
   generation: number;
   objective?: Vec3;
@@ -38,6 +41,8 @@ export type Intervention = {
   candidateId: string | null;
   hold?: boolean;
   recheckAfterMs?: number;
+  auditId?: string;
+  browserRoundTripMs?: number;
 };
 /** Selection is asynchronous; geometry, validation and execution remain in the engine. */
 export interface DecisionSource {
@@ -106,7 +111,7 @@ export class DecisionGate {
   }
   async requestResult(
     context: Omit<DecisionContext, "generation">,
-  ): Promise<{ valid: boolean; candidate: Candidate | null }> {
+  ): Promise<{ valid: boolean; candidate: Candidate | null; auditId?: string; browserRoundTripMs?: number; gateStatus?: "hold" | "stale" | "invalid" }> {
     if (this.pending) return { valid: false, candidate: null };
     const controller = new AbortController(),
       generation = this.generation;
@@ -122,14 +127,20 @@ export class DecisionGate {
           }, this.deadlineMs);
         }),
       ]);
+      const audit = {
+        ...(decision.auditId ? { auditId: decision.auditId } : {}),
+        ...(decision.browserRoundTripMs !== undefined ? { browserRoundTripMs: decision.browserRoundTripMs } : {}),
+      };
       if (controller.signal.aborted || generation !== this.generation)
-        return { valid: false, candidate: null };
-      if (decision.hold) return { valid: false, candidate: null };
+        return { valid: false, candidate: null, ...audit, gateStatus: "stale" };
+      if (decision.hold) return { valid: false, candidate: null, ...audit, gateStatus: "hold" };
       const candidate =
         context.candidates.find((c) => c.id === decision.candidateId) ?? null;
       return {
         valid: decision.candidateId === null || candidate !== null,
         candidate,
+        ...audit,
+        ...(decision.candidateId !== null && candidate === null ? { gateStatus: "invalid" as const } : {}),
       };
     } catch {
       return { valid: false, candidate: null };

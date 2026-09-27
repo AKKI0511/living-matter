@@ -21,7 +21,7 @@ import {
   sites,
   SPAWN,
 } from "./world";
-import type { Runtime } from "./runtime";
+import { physicalScene, type Runtime } from "./runtime";
 import { guardWeaveEdge } from "./weave";
 
 export function Player({ runtime }: { runtime: Runtime }) {
@@ -258,14 +258,18 @@ export function Player({ runtime }: { runtime: Runtime }) {
       runtime.nextObservation = runtime.time + 0.2;
       camera.getWorldDirection(gaze.current);
       const activeIndex = runtime.states.findIndex((s) => s.phase === "active");
-      runtime.history.push({
+      const observation = {
         time: runtime.time,
         position: [...runtime.player],
         velocity: [...runtime.velocity],
         gaze: gaze.current.toArray(),
         grounded,
         activeStructure: activeIndex < 0 ? null : sites[activeIndex].id,
-      });
+      } as const;
+      runtime.history.push({ ...observation, position: [...observation.position], velocity: [...observation.velocity], gaze: [...observation.gaze] });
+      const recovered = runtime.recoveries > runtime.recordedRecoveries;
+      runtime.physicalHistory.record(runtime.history.at(-1)!, physicalScene(runtime), recovered);
+      if (grounded) runtime.recordedRecoveries = runtime.recoveries;
       if (runtime.history.length > 40) runtime.history.shift();
       const last = runtime.constellation.at(-1);
       if (

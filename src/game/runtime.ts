@@ -4,8 +4,10 @@ import {
   type Observation,
 } from "./decisions";
 import { createDecisionSource } from "./decision-backend";
+import { decisionDeadlineMs } from "./decision-audit-mode";
 import { createWeave, weaveRoute, type Weave } from "./weave";
 import { sites, SPAWN, type FormationKind, type Vec3 } from "./world";
+import { PhysicalHistory, describeMatter, describePhysical, type PhysicalScene } from "./semantic";
 
 export type MatterState = {
   kind: FormationKind;
@@ -18,14 +20,17 @@ export type MatterState = {
 };
 export function createRuntime(source: DecisionSource = createDecisionSource()) {
   return {
+    sessionId: crypto.randomUUID(),
     time: 0,
     player: [...SPAWN] as Vec3,
     velocity: [0, 0, 0] as Vec3,
     grounded: false,
     checkpoint: [...SPAWN] as Vec3,
     recoveries: 0,
-    gate: new DecisionGate(source),
+    recordedRecoveries: 0,
+    gate: new DecisionGate(source, decisionDeadlineMs()),
     history: [] as Observation[],
+    physicalHistory: new PhysicalHistory(),
     nextObservation: 0,
     activeSite: null as number | null,
     activeCandidateId: null as string | null,
@@ -60,6 +65,31 @@ export function createRuntime(source: DecisionSource = createDecisionSource()) {
   };
 }
 export type Runtime = ReturnType<typeof createRuntime>;
+
+export function physicalScene(runtime: Runtime): PhysicalScene {
+  const activeSite = runtime.activeSite;
+  const state = activeSite === null ? null : runtime.states[activeSite];
+  return {
+    time: runtime.time,
+    activeSite,
+    phase: state?.phase ?? "idle",
+    kind: state?.kind,
+    offset: state?.offset,
+    weave: runtime.weave,
+  };
+}
+
+export function semanticSnapshot(runtime: Runtime) {
+  const current = runtime.history.at(-1);
+  if (!current) return undefined;
+  const scene = physicalScene(runtime);
+  const player_now = describePhysical(current, scene);
+  return {
+    player_now,
+    recent_behavior_oldest_to_newest: runtime.physicalHistory.snapshot(player_now),
+    matter_now: describeMatter(current, scene),
+  };
+}
 
 export function formMatter(
   runtime: Runtime,

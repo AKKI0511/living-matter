@@ -19,7 +19,7 @@ export const useGame = create<GameState>((set) => ({
   phase: "loading",
   run: 0,
   muted: false,
-  quality: "high",
+  quality: process.env.NEXT_PUBLIC_RENDER_QUALITY === "low" ? "low" : "high",
   reducedMotion: false,
   night: false,
   toggleNight: () => set((s) => ({ night: !s.night })),

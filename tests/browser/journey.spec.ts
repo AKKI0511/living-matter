@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, observeJump, test, type Page } from "./fixtures";
 
 type Snapshot = {
   time: number;
@@ -19,6 +19,7 @@ async function begin(page: Page) {
   await page.goto("/");
   await page.getByRole("button", { name: /Enter the world/ }).click();
   await expect.poll(async () => (await snapshot(page)).phase).toBe("playing");
+  await expect.poll(async () => (await snapshot(page)).grounded).toBe(true);
 }
 async function walkTo(page: Page, z: number, timeout = 40_000) {
   await page.keyboard.down("w");
@@ -34,7 +35,7 @@ async function walkTo(page: Page, z: number, timeout = 40_000) {
   }
 }
 
-test("a fresh player walks the whole route, rides the platform, finishes and restarts", async ({
+test("a fresh player walks the whole route, finishes and restarts", async ({
   page,
 }, info) => {
   const errors: string[] = [];
@@ -44,27 +45,29 @@ test("a fresh player walks the whole route, rides the platform, finishes and res
   });
   await begin(page);
   await page.screenshot({ path: info.outputPath("arrival.png") });
+  await walkTo(page, -5);
+  // Wait for the visible offer before leaving the initial shore.
+  await expect.poll(async () => (await snapshot(page)).states[0].phase).toBe("active");
   await walkTo(page, -103);
   await page.screenshot({ path: info.outputPath("terrace.png") });
   expect((await snapshot(page)).recoveries).toBe(0);
-  // Wait for a safe boarding dwell, then board using ordinary movement.
-  await expect
-    .poll(
-      async () => {
-        const s = await snapshot(page),
-          p = s.states[2];
-        return p.phase === "active" && (s.time - p.rideSince) % 18 < 1;
-      },
-      { timeout: 25_000, intervals: [80] },
-    )
-    .toBe(true);
-  await walkTo(page, -112.3, 6000);
-  await expect
-    .poll(async () => (await snapshot(page)).player[2], {
-      timeout: 20_000,
-      intervals: [100],
-    })
-    .toBeLessThan(-128.8);
+  await expect.poll(async () => (await snapshot(page)).states[2].phase).toBe("active");
+  if ((await snapshot(page)).states[2].kind === "platform") {
+    // A moving deck must be boarded during its near-shore dwell.
+    await expect
+      .poll(
+        async () => {
+          const s = await snapshot(page), p = s.states[2];
+          return (s.time - p.rideSince) % 18 < 1;
+        },
+        { timeout: 25_000, intervals: [80] },
+      )
+      .toBe(true);
+    await walkTo(page, -112.3, 6000);
+    await expect.poll(async () => (await snapshot(page)).player[2], { timeout: 20_000, intervals: [100] }).toBeLessThan(-128.8);
+  } else {
+    await walkTo(page, -128.8);
+  }
   await page.screenshot({ path: info.outputPath("crossing.png") });
   expect((await snapshot(page)).grounded).toBe(true);
   await walkTo(page, -204, 40_000);
@@ -88,10 +91,9 @@ test("jump, fall recovery, pause, and detail controls remain usable", async ({
 }) => {
   await begin(page);
   await expect.poll(async () => (await snapshot(page)).grounded).toBe(true);
+  const jumped = observeJump(page, 1.5);
   await page.keyboard.down("Space");
-  await expect
-    .poll(async () => (await snapshot(page)).player[1])
-    .toBeGreaterThan(1.5);
+  await jumped;
   await page.keyboard.up("Space");
   await expect.poll(async () => (await snapshot(page)).grounded).toBe(true);
   await page.keyboard.down("d");
@@ -105,8 +107,10 @@ test("jump, fall recovery, pause, and detail controls remain usable", async ({
   const frozen = (await snapshot(page)).time;
   await page.waitForTimeout(500);
   expect((await snapshot(page)).time).toBe(frozen);
-  await page.getByRole("button", { name: /Detail high/ }).click();
-  await expect(page.getByRole("button", { name: /Detail low/ })).toBeVisible();
+  const detail = page.getByRole("button", { name: /Detail (high|low)/ });
+  const previousDetail = await detail.textContent();
+  await detail.click();
+  await expect(detail).not.toHaveText(previousDetail!);
   await page.getByRole("button", { name: /Start over/ }).click();
   expect((await snapshot(page)).recoveries).toBe(0);
 });
@@ -131,9 +135,9 @@ test("repeated restarts release scene resources", async ({ page }) => {
   );
   for (let i = 0; i < 4; i++) {
     await page.keyboard.press("Escape");
-    await page.getByRole("button", { name: /Detail high/ }).click();
+    await page.getByRole("button", { name: /Detail (high|low)/ }).click();
     await page.waitForTimeout(100);
-    await page.getByRole("button", { name: /Detail low/ }).click();
+    await page.getByRole("button", { name: /Detail (high|low)/ }).click();
     await page.getByRole("button", { name: /Start over/ }).click();
     await page.waitForTimeout(400);
   }

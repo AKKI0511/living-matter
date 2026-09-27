@@ -1,11 +1,11 @@
-import { expect, test } from "@playwright/test";
+import { expect, observeJump, test } from "./fixtures";
 
 test.describe("touch viewport", () => {
   test.use({
     viewport: { width: 390, height: 844 },
     isMobile: true,
     hasTouch: true,
-    deviceScaleFactor: 1,
+    deviceScaleFactor: process.env.CI ? 0.5 : 1,
   });
   test("entry, joystick, jump, and pause work on a narrow screen", async ({
     page,
@@ -41,16 +41,10 @@ test.describe("touch viewport", () => {
       type: "touchEnd",
       touchPoints: [],
     });
+    // Observe the short jump before tap() finishes its browser round trip.
+    const jumped = observeJump(page, 1);
     await page.getByRole("button", { name: "Jump", exact: true }).tap();
-    await expect
-      .poll(() =>
-        page.evaluate(
-          () =>
-            (window.__livingMatter!.snapshot() as { player: number[] })
-              .player[1],
-        ),
-      )
-      .toBeGreaterThan(1);
+    await jumped;
     await page.getByRole("button", { name: "Pause", exact: true }).tap();
     await expect(page.getByRole("button", { name: /Continue/ })).toBeVisible();
     await page.screenshot({ path: "artifacts/touch-pause.png" });

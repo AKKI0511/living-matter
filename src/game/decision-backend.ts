@@ -29,29 +29,24 @@ export class JevDecisions implements DecisionSource {
     const latest = context.observations.at(-1);
     if (!latest) return { candidateId: null };
     const signature = JSON.stringify({
+      semantic: context.semantic,
       candidates: context.candidates.map((c) => ({
         id: c.id,
         route: c.route,
         from: c.physical?.from,
         to: c.physical?.to,
       })),
-      p: latest?.position.map((v) => Math.round(v / 2)),
-      v: latest?.velocity.map((v) => Math.round(v)),
-      g: latest?.gaze.map((v) => Math.round(v * 3)),
-      grounded: latest?.grounded,
-      recentlyAirborne: context.observations
-        .slice(-10)
-        .some((o) => !o.grounded),
       current: context.current,
     });
     const now = performance.now();
     if (signature === this.signature && this.cached && now < this.expires)
-      return this.cached;
+      return { ...this.cached, auditId: undefined };
     // A cooldown is unavailable, never an instruction to withdraw support.
     if (now < this.nextRequest) throw new Error("Decision cooldown");
     this.nextRequest = now + 1500;
     const epoch = this.epoch;
     try {
+      const started = performance.now();
       const response = await fetch("/api/decision", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -59,7 +54,7 @@ export class JevDecisions implements DecisionSource {
         signal,
       });
       if (!response.ok) throw new Error(`Decision service ${response.status}`);
-      const result: Intervention = await response.json();
+      const result: Intervention = { ...(await response.json()), browserRoundTripMs: performance.now() - started };
       signal.throwIfAborted();
       if (epoch !== this.epoch) throw new Error("Obsolete decision");
       if (
