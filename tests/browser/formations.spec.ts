@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "./fixtures";
+import { expect, observeJump, test, type Page } from "./fixtures";
 import { sites, type FormationKind } from "../../src/game/world";
 type Snapshot = {
   time: number;
@@ -147,10 +147,9 @@ test("jumping aboard a moving platform preserves transport momentum", async ({
       intervals: [50],
     })
     .toBeLessThan(-8);
+  const jumped = observeJump(page);
   await page.keyboard.press("Space");
-  await expect
-    .poll(async () => (await snapshot(page)).grounded, { intervals: [50] })
-    .toBe(false);
+  await jumped;
   await expect
     .poll(async () => (await snapshot(page)).grounded, { intervals: [50] })
     .toBe(true);

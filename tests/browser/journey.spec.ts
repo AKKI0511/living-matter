@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "./fixtures";
+import { expect, observeJump, test, type Page } from "./fixtures";
 
 type Snapshot = {
   time: number;
@@ -91,10 +91,9 @@ test("jump, fall recovery, pause, and detail controls remain usable", async ({
 }) => {
   await begin(page);
   await expect.poll(async () => (await snapshot(page)).grounded).toBe(true);
+  const jumped = observeJump(page, 1.5);
   await page.keyboard.down("Space");
-  await expect
-    .poll(async () => (await snapshot(page)).player[1])
-    .toBeGreaterThan(1.5);
+  await jumped;
   await page.keyboard.up("Space");
   await expect.poll(async () => (await snapshot(page)).grounded).toBe(true);
   await page.keyboard.down("d");

@@ -1,4 +1,4 @@
-import { expect, test } from "./fixtures";
+import { expect, observeJump, test } from "./fixtures";
 
 test.describe("touch viewport", () => {
   test.use({
@@ -42,9 +42,7 @@ test.describe("touch viewport", () => {
       touchPoints: [],
     });
     // Observe the short jump before tap() finishes its browser round trip.
-    const jumped = page.waitForFunction(() =>
-      (window.__livingMatter!.snapshot() as { player: number[] }).player[1] > 1,
-    undefined, { polling: "raf", timeout: process.env.CI ? 30_000 : 12_000 });
+    const jumped = observeJump(page, 1);
     await page.getByRole("button", { name: "Jump", exact: true }).tap();
     await jumped;
     await page.getByRole("button", { name: "Pause", exact: true }).tap();

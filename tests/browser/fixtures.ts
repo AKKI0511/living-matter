@@ -1,5 +1,13 @@
-import { test as base } from "@playwright/test";
+import { test as base, type Page } from "@playwright/test";
 export { expect, type Page } from "@playwright/test";
+
+/** Start before input so a brief jump cannot finish between protocol samples. */
+export function observeJump(page: Page, minimumHeight: number | null = null) {
+  return page.waitForFunction((minimumHeight) => {
+    const state = window.__livingMatter!.snapshot() as { player: number[]; grounded: boolean };
+    return minimumHeight === null ? !state.grounded : state.player[1] > minimumHeight;
+  }, minimumHeight, { polling: "raf", timeout: process.env.CI ? 30_000 : 12_000 });
+}
 
 export const test = base.extend<{ browserDiagnostics: void }>({
   browserDiagnostics: [async ({ page }, use, info) => {

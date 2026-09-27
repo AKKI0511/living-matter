@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "./fixtures";
+import { expect, observeJump, test, type Page } from "./fixtures";
 const snap = (page: Page) =>
   page.evaluate(
     () =>
@@ -92,10 +92,9 @@ test("free movement relative to a travelling platform, including reversing and j
   await page.keyboard.up("w");
   after = await relative();
   expect(after[1] - before[1]).toBeLessThan(-0.5);
+  const jumped = observeJump(page);
   await page.keyboard.press("Space");
-  await expect
-    .poll(async () => (await snap(page)).grounded, { intervals: [30] })
-    .toBe(false);
+  await jumped;
   await expect.poll(async () => (await snap(page)).grounded).toBe(true);
   expect((await snap(page)).recoveries).toBe(0);
 });
