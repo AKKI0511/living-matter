@@ -10,6 +10,8 @@ export const test = base.extend<{ browserDiagnostics: void }>({
       const extension = gl?.getExtension("WEBGL_debug_renderer_info");
       return {
         visible: document.visibilityState,
+        pixel_ratio: window.devicePixelRatio,
+        canvas_size: gl ? [gl.drawingBufferWidth, gl.drawingBufferHeight] : null,
         renderer: extension ? gl?.getParameter(extension.UNMASKED_RENDERER_WEBGL) : gl?.getParameter(gl.RENDERER),
         snapshot: window.__livingMatter?.snapshot(),
       };

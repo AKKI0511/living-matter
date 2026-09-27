@@ -34,7 +34,7 @@ Local browser tests use Google Chrome. CI uses Playwright Chromium. Run gameplay
 pnpm exec playwright test production.spec.ts
 ```
 
-CI uses the existing low-detail renderer (`NEXT_PUBLIC_RENDER_QUALITY=low`) with software graphics. This changes presentation only; movement and physics are identical. Default local play starts in high detail. Measure frame times locally with GPU acceleration rather than treating CI timings as GPU benchmarks.
+CI uses the existing low-detail renderer (`NEXT_PUBLIC_RENDER_QUALITY=low`) with software graphics and a smaller canvas pixel budget. This changes presentation only; movement and physics are identical. Default local play starts in high detail. Measure frame times locally with GPU acceleration rather than treating CI timings as GPU benchmarks.
 
 Development exposes `window.__livingMatter` for snapshots, positioning, and formation checks. Production omits that interface.
 
