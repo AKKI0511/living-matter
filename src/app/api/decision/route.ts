@@ -89,8 +89,9 @@ export async function POST(request: Request) {
       failure = error;
     }
     if (auditCall) {
-      void completeJevCall(auditCall, {
+      await completeJevCall(auditCall, {
         providerRoundTripMs: performance.now() - providerStarted,
+        providerRequestId,
         response: response as unknown as Record<string, unknown> | undefined,
         decision,
         ...(failure ? { error: {
@@ -100,6 +101,7 @@ export async function POST(request: Request) {
         } } : {}),
       }).catch(() => {
         console.warn("[decisions] Jev answered but the audit could not be completed.");
+        throw new Error("Decision audit unavailable");
       });
     }
     if (failure || !response || !decision) {

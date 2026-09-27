@@ -1,6 +1,8 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
+import { execFileSync } from "node:child_process";
 import { mkdir, readdir, readFile, rename, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
+import { decisionPolicy } from "./decision-request";
 
 const PRICE_SOURCE = "https://docs.typesafe.ai/models";
 const PRICE_CHECKED_AT = "2026-09-23";
@@ -59,11 +61,23 @@ async function readJson(path: string): Promise<JsonRecord | null> {
 async function ensureSession(sessionId: string) {
   const directory = sessionDirectory(sessionId);
   await mkdir(join(directory, "calls"), { recursive: true });
+  if (await readJson(join(directory, "session.json"))) return directory;
   try {
+    // Record provenance without credentials or environment dumps.
+    let revision: string | null = null;
+    let dirty: boolean | null = null;
+    try {
+      revision = execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+      dirty = !!execFileSync("git", ["status", "--porcelain"], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+    } catch { /* Git is optional for local runs. */ }
     await writeJson(join(directory, "session.json"), {
       schema_version: 1,
       session_id: sessionId,
       started_at: new Date().toISOString(),
+      revision,
+      dirty_worktree: dirty,
+      decision_policy: decisionPolicy,
+      replay: "Recorded decision contexts and answers; no provider calls or physics resimulation.",
       pricing: {
         source: PRICE_SOURCE,
         checked_at: PRICE_CHECKED_AT,
@@ -132,6 +146,8 @@ async function refreshSummary(sessionId: string) {
     model_counts: modelCounts,
     total_input_tokens: tokens("input"),
     total_output_tokens: tokens("output"),
+    unknown_input_token_calls: audits.filter((audit) => numberOrNull((audit.tokens as JsonRecord | undefined)?.input) === null).length,
+    unknown_output_token_calls: audits.filter((audit) => numberOrNull((audit.tokens as JsonRecord | undefined)?.output) === null).length,
     cost: {
       currency: "USD",
       known_estimated_usd: Math.round(costs.reduce<number>((sum, value) => sum + (value ?? 0), 0) * 1e12) / 1e12,
@@ -163,17 +179,23 @@ async function refreshSummary(sessionId: string) {
 }
 
 export async function beginJevCall(sessionId: string, request: JsonRecord, gameContext: unknown): Promise<AuditCall> {
+  const startedMs = performance.now();
   return withSessionLock(sessionId, async () => {
     await ensureSession(sessionId);
     const callId = randomUUID();
     const directory = callDirectory(sessionId, callId);
     const startedAt = new Date().toISOString();
+    const sequence = (await readdir(join(sessionDirectory(sessionId), "calls"), { withFileTypes: true })).filter((entry) => entry.isDirectory()).length;
     await mkdir(directory);
     await writeJson(join(directory, "jev-request.json"), request, true);
     await writeJson(join(directory, "game-context.json"), gameContext, true);
-    await writeJson(join(directory, "started.json"), { session_id: sessionId, call_id: callId, started_at: startedAt }, true);
+    await writeJson(join(directory, "started.json"), {
+      schema_version: 1, session_id: sessionId, call_id: callId, started_at: startedAt, sequence,
+      request_sha256: createHash("sha256").update(JSON.stringify(request)).digest("hex"),
+      decision_policy: decisionPolicy,
+    }, true);
     await refreshSummary(sessionId);
-    return { sessionId, callId, startedAt, startedMs: performance.now(), directory };
+    return { sessionId, callId, startedAt, startedMs, directory };
   });
 }
 
@@ -186,6 +208,7 @@ export async function startJevSession(sessionId: string) {
 
 export async function completeJevCall(call: AuditCall, detail: {
   providerRoundTripMs: number;
+  providerRequestId?: string;
   response?: JsonRecord;
   decision?: unknown;
   error?: JsonRecord;
@@ -208,6 +231,7 @@ export async function completeJevCall(call: AuditCall, detail: {
       completed_at: completedAt,
       status: detail.error ? "error" : "success",
       model,
+      provider_request_id: detail.providerRequestId ?? response?.request_id ?? null,
       timing: {
         provider_round_trip_ms: detail.providerRoundTripMs,
         server_total_ms: performance.now() - call.startedMs,

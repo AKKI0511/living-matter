@@ -3,6 +3,10 @@ on: [push, pull_request]
 jobs:
   verify:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      NEXT_PUBLIC_DECISION_BACKEND: preview
+      NEXT_PUBLIC_JEV_SESSION_AUDIT: '0'
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4

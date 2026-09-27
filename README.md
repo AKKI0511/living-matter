@@ -44,7 +44,7 @@ TYPESAFE_DEFAULT_MODEL=jev-1.13.0
 NEXT_PUBLIC_JEV_SESSION_AUDIT=0
 ```
 
-Restart the dev server. Set the backend to `preview` to switch back. Live mode is experimental; [here is how it works](docs/jev.md). To record a play session during development, set `NEXT_PUBLIC_JEV_SESSION_AUDIT=1` and restart. Auditing defaults to off and is disabled in production. The ignored [Jev session audit](docs/jev-session-audits.md) can be found with `pnpm jev:sessions --latest`.
+Restart the dev server. Set the backend to `preview` to switch back. Live mode is experimental; [here is how it works, with example inputs and answers](docs/jev.md). To record a play session during development, set `NEXT_PUBLIC_JEV_SESSION_AUDIT=1` and restart. Auditing defaults to off and is disabled in production. Find a run with `pnpm jev:sessions --latest`, then [replay its decisions and curate eval data](docs/jev-session-audits.md). Local runs stay gitignored.
 
 ## Run a production build
 
