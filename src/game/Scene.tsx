@@ -32,7 +32,7 @@ declare global {
         triangles: number;
       };
       teleport: (p: Vec3) => void;
-      formation: (site: number, kind: FormationKind, bend?: number) => void;
+      formation: (site: number, kind: FormationKind, bend?: number, reverse?: boolean) => void;
       look: (yaw: number, pitch: number) => void;
     };
   }
@@ -95,15 +95,15 @@ function Simulation() {
         teleport: (p) => {
           runtime.forcedPosition = p;
         },
-        formation: (i, kind, bend = 0) => {
+        formation: (i, kind, bend = 0, reverse = false) => {
           if (sites[i]?.candidates.includes(kind)) {
             formMatter(
               runtime,
               i,
               kind,
-              false,
+              reverse,
               kind === "weave"
-                ? weaveRoute(sites[i], Math.max(-1, Math.min(1, bend)))
+                ? weaveRoute(sites[i], Math.max(-1, Math.min(1, bend)), reverse)
                 : undefined,
             );
             runtime.manualFormation = true;
