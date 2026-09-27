@@ -5,7 +5,7 @@ import { join, resolve } from "node:path";
 import { decisionPolicy } from "./decision-request";
 
 const PRICE_SOURCE = "https://docs.typesafe.ai/models";
-const PRICE_CHECKED_AT = "2026-09-23";
+const PRICE_CHECKED_AT = "2026-09-27";
 const PRICE_PER_MILLION_INPUT_USD: Record<string, number> = {
   "jev-1.13.0": 0.042,
 };
