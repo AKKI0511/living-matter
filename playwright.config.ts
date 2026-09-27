@@ -8,11 +8,11 @@ export default defineConfig({
   use: {
     baseURL: process.env.PLAYTEST_URL || "http://localhost:3000",
     channel: process.env.CI ? "chromium" : "chrome",
-    headless: !process.env.CI,
-    viewport: process.env.CI ? { width: 800, height: 500 } : { width: 1440, height: 900 },
+    headless: true,
+    viewport: process.env.CI ? { width: 640, height: 400 } : { width: 1440, height: 900 },
     deviceScaleFactor: process.env.CI ? 0.5 : 1,
     launchOptions: process.env.CI ? {
-      args: ["--use-gl=angle", "--use-angle=gl", "--use-cmd-decoder=passthrough"],
+      args: ["--use-angle=swiftshader", "--enable-unsafe-swiftshader"],
     } : undefined,
     screenshot: "only-on-failure",
     video: process.env.CI ? "off" : "retain-on-failure",
