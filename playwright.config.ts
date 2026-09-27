@@ -12,7 +12,7 @@ export default defineConfig({
     viewport: process.env.CI ? { width: 800, height: 500 } : { width: 1440, height: 900 },
     deviceScaleFactor: process.env.CI ? 0.5 : 1,
     launchOptions: process.env.CI ? {
-      args: ["--use-gl=angle", "--use-angle=gl"],
+      args: ["--use-gl=angle", "--use-angle=gl", "--use-cmd-decoder=passthrough"],
     } : undefined,
     screenshot: "only-on-failure",
     video: process.env.CI ? "off" : "retain-on-failure",
