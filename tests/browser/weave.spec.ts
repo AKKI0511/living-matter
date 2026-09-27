@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures";
 
 test("ordinary preview walking completes using rolling matter without browser warnings", async ({
   page,

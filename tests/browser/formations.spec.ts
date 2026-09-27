@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "./fixtures";
 import { sites, type FormationKind } from "../../src/game/world";
 type Snapshot = {
   time: number;
