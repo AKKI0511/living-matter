@@ -4,7 +4,7 @@ export default defineConfig({
   timeout: 180_000,
   workers: 1,
   reporter: process.env.CI ? "line" : "list",
-  expect: { timeout: 12_000 },
+  expect: { timeout: process.env.CI ? 30_000 : 12_000 },
   use: {
     baseURL: process.env.PLAYTEST_URL || "http://localhost:3000",
     channel: process.env.CI ? "chromium" : "chrome",

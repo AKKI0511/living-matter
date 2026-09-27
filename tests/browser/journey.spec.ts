@@ -45,6 +45,7 @@ test("a fresh player walks the whole route, finishes and restarts", async ({
   });
   await begin(page);
   await page.screenshot({ path: info.outputPath("arrival.png") });
+  await walkTo(page, -5);
   // Wait for the visible offer before leaving the initial shore.
   await expect.poll(async () => (await snapshot(page)).states[0].phase).toBe("active");
   await walkTo(page, -103);
