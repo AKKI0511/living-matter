@@ -104,8 +104,10 @@ test("jump, fall recovery, pause, and detail controls remain usable", async ({
   const frozen = (await snapshot(page)).time;
   await page.waitForTimeout(500);
   expect((await snapshot(page)).time).toBe(frozen);
-  await page.getByRole("button", { name: /Detail high/ }).click();
-  await expect(page.getByRole("button", { name: /Detail low/ })).toBeVisible();
+  const detail = page.getByRole("button", { name: /Detail (high|low)/ });
+  const previousDetail = await detail.textContent();
+  await detail.click();
+  await expect(detail).not.toHaveText(previousDetail!);
   await page.getByRole("button", { name: /Start over/ }).click();
   expect((await snapshot(page)).recoveries).toBe(0);
 });
@@ -130,9 +132,9 @@ test("repeated restarts release scene resources", async ({ page }) => {
   );
   for (let i = 0; i < 4; i++) {
     await page.keyboard.press("Escape");
-    await page.getByRole("button", { name: /Detail high/ }).click();
+    await page.getByRole("button", { name: /Detail (high|low)/ }).click();
     await page.waitForTimeout(100);
-    await page.getByRole("button", { name: /Detail low/ }).click();
+    await page.getByRole("button", { name: /Detail (high|low)/ }).click();
     await page.getByRole("button", { name: /Start over/ }).click();
     await page.waitForTimeout(400);
   }

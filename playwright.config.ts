@@ -3,6 +3,7 @@ export default defineConfig({
   testDir: "./tests/browser",
   timeout: 180_000,
   workers: 1,
+  reporter: process.env.CI ? "line" : "list",
   expect: { timeout: 12_000 },
   use: {
     baseURL: process.env.PLAYTEST_URL || "http://localhost:3000",
