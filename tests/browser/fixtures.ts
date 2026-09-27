@@ -1,7 +1,9 @@
-import { test } from "@playwright/test";
-export { test, expect, type Page } from "@playwright/test";
+import { test as base } from "@playwright/test";
+export { expect, type Page } from "@playwright/test";
 
-test.afterEach(async ({ page }, info) => {
+export const test = base.extend<{ browserDiagnostics: void }>({
+  browserDiagnostics: [async ({ page }, use, info) => {
+  await use();
   if (info.status === info.expectedStatus || page.isClosed()) return;
   const diagnostics = await page.evaluate(() => {
     const gl = document.querySelector("canvas")?.getContext("webgl2");
@@ -14,4 +16,5 @@ test.afterEach(async ({ page }, info) => {
   }).catch(() => ({ error: "Browser diagnostics unavailable" }));
   console.log("Browser failure diagnostics:", JSON.stringify(diagnostics));
   await info.attach("browser-diagnostics", { body: JSON.stringify(diagnostics, null, 2), contentType: "application/json" });
+  }, { auto: true }],
 });
