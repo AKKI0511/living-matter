@@ -11,6 +11,7 @@ jobs:
       NEXT_PUBLIC_DECISION_BACKEND: preview
       NEXT_PUBLIC_JEV_SESSION_AUDIT: '0'
       NEXT_PUBLIC_RENDER_QUALITY: low
+      LIBGL_ALWAYS_SOFTWARE: '1'
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -26,9 +27,9 @@ jobs:
       - run: pnpm build
       - run: pnpm exec playwright install --with-deps chromium
       - name: Check formation traversal before the full browser suite
-        run: pnpm exec playwright test formations.spec.ts -g 'reach also'
+        run: xvfb-run -a pnpm exec playwright test formations.spec.ts -g 'reach also'
         timeout-minutes: 4
-      - run: pnpm test:e2e
+      - run: xvfb-run -a pnpm test:e2e
         timeout-minutes: 20
       - uses: actions/upload-artifact@v4
         if: failure()
