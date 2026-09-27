@@ -4,6 +4,7 @@ import {
   type Observation,
 } from "./decisions";
 import { createDecisionSource } from "./decision-backend";
+import { decisionDeadlineMs } from "./decision-audit-mode";
 import { createWeave, weaveRoute, type Weave } from "./weave";
 import { sites, SPAWN, type FormationKind, type Vec3 } from "./world";
 import { PhysicalHistory, describeMatter, describePhysical, type PhysicalScene } from "./semantic";
@@ -27,7 +28,7 @@ export function createRuntime(source: DecisionSource = createDecisionSource()) {
     checkpoint: [...SPAWN] as Vec3,
     recoveries: 0,
     recordedRecoveries: 0,
-    gate: new DecisionGate(source),
+    gate: new DecisionGate(source, decisionDeadlineMs()),
     history: [] as Observation[],
     physicalHistory: new PhysicalHistory(),
     nextObservation: 0,

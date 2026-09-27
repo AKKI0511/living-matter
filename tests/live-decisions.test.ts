@@ -5,6 +5,7 @@ import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { availableCandidates } from "../src/game/affordances";
+import { decisionDeadlineMs } from "../src/game/decision-audit-mode";
 import { DecisionGate, type Observation } from "../src/game/decisions";
 import { createRuntime, physicalScene, semanticSnapshot } from "../src/game/runtime";
 import { PhysicalHistory, describeCandidate, describePhysical, describeMatter, relativeDirection } from "../src/game/semantic";
@@ -159,6 +160,7 @@ test("server endpoint composes a mocked Jev response without a live call", async
     mutableEnv.NODE_ENV = "development";
     process.env.NEXT_PUBLIC_DECISION_BACKEND = "jev";
     process.env.NEXT_PUBLIC_JEV_SESSION_AUDIT = "0";
+    assert.equal(decisionDeadlineMs(), 2000);
     process.env.TYPESAFE_API_KEY = "test-not-a-real-key";
     process.env.TYPESAFE_DEFAULT_MODEL = "jev-1.13.0";
     process.env.JEV_SESSION_DIR = auditRoot;
@@ -179,6 +181,7 @@ test("server endpoint composes a mocked Jev response without a live call", async
     assert.deepEqual(await readdir(auditRoot), []);
 
     process.env.NEXT_PUBLIC_JEV_SESSION_AUDIT = "1";
+    assert.equal(decisionDeadlineMs(), 5000);
     const started = await startSession(new Request("http://localhost:3000/api/decision/session", { method: "POST", body: JSON.stringify({ sessionId: context.sessionId }) }));
     assert.equal(started.status, 200);
     const response = await POST(new Request("http://localhost:3000/api/decision", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(context) }));
@@ -203,6 +206,7 @@ test("server endpoint composes a mocked Jev response without a live call", async
     assert.equal(calls, 2);
 
     mutableEnv.NODE_ENV = "production";
+    assert.equal(decisionDeadlineMs(), 2000);
     const productionContext = reachContext();
     assert.equal((await startSession(new Request("http://localhost:3000/api/decision/session", { method: "POST", body: JSON.stringify({ sessionId: productionContext.sessionId }) }))).status, 409);
     const productionResponse = await POST(new Request("http://localhost:3000/api/decision", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(productionContext) }));

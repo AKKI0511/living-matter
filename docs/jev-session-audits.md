@@ -24,7 +24,7 @@ The game creates `jev-request.json` before making the provider call. A failed or
 
 For Jev 1.13, the cost estimate uses the [TypeSafe model price](https://docs.typesafe.ai/models): $0.042 per million input tokens, output tokens free, checked 2026-09-27. Each call records the rate and source used. The estimate may differ from the account bill if credits or custom pricing apply. `audit.json` records provider round-trip time, server time, and model evaluation time when Jev supplies it. `game-outcome.json` records browser round-trip time and the game's final handling of the decision.
 
-The files contain gameplay observations and model answers, but never the API key. If you set `JEV_SESSION_DIR`, sessions are written there instead; keep that directory out of git as well. Known token totals are accompanied by counts of calls with missing usage. Files are saved before returning an audited decision; disk failure prevents an unaudited decision from being applied. Browser latency includes the audit write, while provider latency measures the SDK call alone.
+The files contain gameplay observations and model answers, but never the API key. If you set `JEV_SESSION_DIR`, sessions are written there instead; keep that directory out of git as well. Known token totals are accompanied by counts of calls with missing usage. Files are saved before returning an audited decision; disk failure prevents an unaudited decision from being applied. Browser latency includes the audit write, while provider latency measures the SDK call alone. Recorded development calls have a five-second browser deadline to allow disk writes; ordinary calls keep their two-second deadline. Stale physical decisions are still discarded.
 
 ## Replay a recorded session
 
