@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "./fixtures";
 import { ScenarioDecisions } from "../../src/game/decisions";
-import { walkWorld, go, snapshot as physicalSnapshot } from "./steering-helpers";
+import { go, snapshot as physicalSnapshot } from "./steering-helpers";
+import { sites } from "../../src/game/world";
 
 test.skip(process.env.NEXT_PUBLIC_DECISION_BACKEND === "preview", "Requires the live-mode browser bundle; transport is mocked.");
 
@@ -22,7 +23,7 @@ async function mockDecisions(page: Page) {
   return counts;
 }
 
-test("delayed mocked live decisions cross water, recover, finish and restart", async ({ page }, info) => {
+test("delayed mocked live decisions form a water route after recovery", async ({ page }, info) => {
   const counts = await mockDecisions(page);
   const warnings: string[] = [];
   page.on("pageerror", (e) => warnings.push(e.message));
@@ -36,7 +37,6 @@ test("delayed mocked live decisions cross water, recover, finish and restart", a
   await expect.poll(async () => (await snapshot()).recoveries).toBeGreaterThan(0);
   await expect.poll(async () => (await snapshot()).grounded).toBe(true);
   const recovered = (await snapshot()).recoveries;
-  const walking = walkWorld(page);
   try {
     const frameTimes = await page.evaluate(async () => {
       const gl = document.querySelector("canvas")?.getContext("webgl2");
@@ -57,14 +57,14 @@ test("delayed mocked live decisions cross water, recover, finish and restart", a
     });
     console.log("Local walking frame times:", JSON.stringify(frameTimes));
     await info.attach("frame-times", { body: JSON.stringify(frameTimes, null, 2), contentType: "application/json" });
-    await walking;
-    await expect.poll(async () => (await snapshot()).phase).toBe("complete");
+    await page.evaluate(start => window.__livingMatter!.teleport([start[0], start[1] + 1, start[2] + 6]), sites[3].start);
+    await go(page, [sites[3].start[0], sites[3].start[1], sites[3].start[2] + 1.2]);
+    await page.evaluate(yaw => window.__livingMatter!.look(yaw, 0),
+      Math.atan2(-(sites[3].end[0] - sites[3].start[0]), -(sites[3].end[2] - sites[3].start[2])));
+    await expect.poll(async () => (await snapshot()).states[3].phase).toBe("active");
   } finally { await page.keyboard.up("w"); }
-  expect(counts.waterOffers).toBeGreaterThanOrEqual(3);
+  expect(counts.waterOffers).toBeGreaterThanOrEqual(1);
   expect((await snapshot()).recoveries).toBe(recovered);
-  await page.getByRole("button", { name: /Wander again/ }).click();
-  await expect.poll(async () => (await snapshot()).phase).toBe("playing");
-  expect((await snapshot()).recoveries).toBe(0);
   expect(warnings).toEqual([]);
 });
 

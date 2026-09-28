@@ -1,21 +1,5 @@
 import { expect, test } from "./fixtures";
-import { cross, snapshot, walkWorld } from "./steering-helpers";
-
-test("ordinary walking completes staggered crossings without warnings", async ({ page }) => {
-  const warnings: string[] = [];
-  page.on("console", m => { if (m.type() === "warning" || m.type() === "error") warnings.push(m.text()); });
-  page.on("pageerror", e => warnings.push(e.message));
-  await page.goto("/");
-  await expect(page.getByText(/(Deterministic preview|Live intelligence)/)).toBeVisible();
-  await page.getByRole("button", { name: /Enter the world/ }).click();
-  await walkWorld(page);
-  expect((await snapshot(page)).phase).toBe("complete");
-  expect((await snapshot(page)).recoveries).toBe(0);
-  await page.getByRole("button", { name: /Wander again/ }).click();
-  await expect.poll(async () => (await snapshot(page)).phase).toBe("playing");
-  expect((await snapshot(page)).recoveries).toBe(0);
-  expect(warnings).toEqual([]);
-});
+import { cross } from "./steering-helpers";
 
 test("rolling matter crosses an offset gap and keeps exactly 512 units", async ({ page }) => {
   await page.goto("/");

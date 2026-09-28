@@ -39,7 +39,9 @@ for (const [index, kind] of [
       await go(page, structureBoxes(site, "platform")[0].position);
       await expect
         .poll(async () => (await snapshot(page)).player[2], {
-          timeout: 18_000,
+          // A slow CI frame rate can miss the first shuttle departure; allow
+          // the next cycle before calling the traversal impossible.
+          timeout: 40_000,
           intervals: [100],
         })
         .toBeLessThan(site.end[2] + 4);

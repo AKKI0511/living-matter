@@ -68,6 +68,7 @@ export class ScenarioDecisions implements DecisionSource {
       !semantic.player_now.motion.includes("behind"))
       return { candidateId: null, hold: true };
     if (semantic?.matter_now.player_supported_by_matter &&
+      semantic.player_now.position_on_support !== "at an edge" &&
       ["living matter", "walkable ground"].includes(semantic.player_now.facing_into ?? ""))
       return { candidateId: null, hold: true };
     if (!latest || !candidates.some((c) => c.physical))

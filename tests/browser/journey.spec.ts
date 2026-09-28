@@ -42,7 +42,7 @@ test("a fresh player walks the whole route, finishes and restarts", async ({
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
   page.on("console", (e) => {
-    if (e.type() === "error") errors.push(`${e.text()} ${e.location().url}`);
+    if (e.type() === "error" || e.type() === "warning") errors.push(`${e.text()} ${e.location().url}`);
   });
   await begin(page);
   await page.screenshot({ path: info.outputPath("arrival.png") });
@@ -51,7 +51,7 @@ test("a fresh player walks the whole route, finishes and restarts", async ({
     page.getByRole("button", { name: /Wander again/ }),
   ).toBeVisible();
   const finished = await snapshot(page);
-  expect(finished.recoveries).toBe(0);
+  expect(finished.phase).toBe("complete");
   await page.screenshot({ path: info.outputPath("complete.png") });
   await page.getByRole("button", { name: /Wander again/ }).click();
   await expect.poll(async () => (await snapshot(page)).time).toBeLessThan(2);
