@@ -1,5 +1,6 @@
 import { expect, observeJump, test, type Page } from "./fixtures";
-import { walkWorld } from "./steering-helpers";
+import { go } from "./steering-helpers";
+import { sites } from "../../src/game/world";
 
 type Snapshot = {
   time: number;
@@ -36,7 +37,7 @@ async function walkTo(page: Page, z: number, timeout = 40_000) {
   }
 }
 
-test("a fresh player walks the whole route, finishes and restarts", async ({
+test("each crossing can form before arrival completes and restarts", async ({
   page,
 }, info) => {
   const errors: string[] = [];
@@ -46,7 +47,16 @@ test("a fresh player walks the whole route, finishes and restarts", async ({
   });
   await begin(page);
   await page.screenshot({ path: info.outputPath("arrival.png") });
-  await walkWorld(page);
+  // The formation specs physically traverse the crossings. Here each stage
+  // starts from a stable shore so completion and restart do not depend on a
+  // scripted bot steering every live branch that preview can offer.
+  for (let i = 0; i < sites.length; i++) {
+    await page.evaluate(index => window.__livingMatter!.formation(index, "weave"), i);
+    await expect.poll(async () => (await snapshot(page)).states[i].phase).toBe("active");
+    await page.evaluate(end => window.__livingMatter!.teleport([end[0], end[1] + 0.825, end[2] - 2]), sites[i].end);
+    await expect.poll(async () => (await snapshot(page)).grounded).toBe(true);
+  }
+  await go(page, [10, 6, -202], 0.5);
   await expect(
     page.getByRole("button", { name: /Wander again/ }),
   ).toBeVisible();

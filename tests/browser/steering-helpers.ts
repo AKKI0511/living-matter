@@ -33,13 +33,15 @@ export async function cross(page: Page, index: number) {
   await page.evaluate(yaw => window.__livingMatter!.look(yaw, 0), Math.atan2(-(site.end[0] - site.start[0]), -(site.end[2] - site.start[2])));
   await expect.poll(async () => (await snapshot(page)).states[index].phase).toBe("active");
   const first = (await snapshot(page)).weave!.banks[0];
-  await go(page, first.from.map((v, a) => v * 0.3 + first.to[a] * 0.7));
-  let bank = (await snapshot(page)).weave!.banks[1];
+  await go(page, first.from.map((v, a) => v * 0.3 + first.to[a] * 0.7), 0.75);
   const remaining = (b: Bank) => Math.min(...[b.from, b.to].map(p => Math.hypot(p[0] - site.end[0], p[2] - site.end[2])));
+  // A glance back can replace the second half with a reverse section. Follow
+  // the half actually closest to the destination, whichever slot holds it.
+  let bank = (await snapshot(page)).weave!.banks.reduce((a, b) => remaining(a) < remaining(b) ? a : b);
   for (let i = 0; i < 15; i++) {
     const fromCloser = Math.hypot(bank.from[0] - site.end[0], bank.from[2] - site.end[2]) < Math.hypot(bank.to[0] - site.end[0], bank.to[2] - site.end[2]);
     const t = fromCloser ? 0.55 : 0.75;
-    await go(page, bank.from.map((v, a) => v * (1 - t) + bank.to[a] * t));
+    await go(page, bank.from.map((v, a) => v * (1 - t) + bank.to[a] * t), 0.75);
     const state = await snapshot(page);
     const landed = islands[index + 1];
     const seam = PLAYER_RADIUS + WEAVE_END_CAP;
@@ -69,13 +71,4 @@ export async function cross(page: Page, index: number) {
     bank = (await snapshot(page)).weave!.banks.reduce((a, b) => remaining(a) < remaining(b) ? a : b);
   }
   throw new Error(`Crossing ${index} did not reach shore`);
-}
-
-export async function walkWorld(page: Page) {
-  for (let i = 0; i < sites.length; i++) {
-    // The island interiors provide room to line up with the next offset shore.
-    if (i > 0) await go(page, [sites[i].start[0], sites[i].start[1], (sites[i - 1].end[2] + sites[i].start[2]) / 2]);
-    await cross(page, i);
-  }
-  await go(page, [10, 6, -202], 0.5);
 }

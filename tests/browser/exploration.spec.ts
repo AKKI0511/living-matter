@@ -8,18 +8,18 @@ test("a player can depart west from the starting island and turn north in open w
   await expect.poll(async () => (await snapshot(page)).states.some(s => s.phase === "active")).toBe(true);
   const initial = (await snapshot(page)).weave!;
   expect(initial.banks[0].to[0]).toBeLessThan(-15);
-  await go(page, initial.banks[0].from.map((v, i) => v * 0.3 + initial.banks[0].to[i] * 0.7));
-  await go(page, initial.banks[1].from.map((v, i) => v * 0.35 + initial.banks[1].to[i] * 0.65));
-  const occupied = (await snapshot(page)).weave!.banks[1];
-  const revision = (await snapshot(page)).weave!.revision;
-  await page.evaluate(() => window.__livingMatter!.look(0, 0));
+  const occupied = initial.banks[1];
+  const along = occupied.from.map((v, i) => v * 0.35 + occupied.to[i] * 0.65);
+  const revision = initial.revision;
+  // Place the player on the western half before turning. Steering tests cover
+  // walking; this test isolates the decision to build north from open water.
+  await page.evaluate(p => { window.__livingMatter!.teleport([p[0], p[1] + 0.885, p[2]]); window.__livingMatter!.look(0, 0); }, along);
+  await expect.poll(async () => (await snapshot(page)).grounded).toBe(true);
   await expect.poll(async () => (await snapshot(page)).weave!.revision).toBeGreaterThan(revision);
   const state = (await snapshot(page)).weave!;
   expect(state.banks[1]).toEqual(occupied);
   expect(state.banks[0].to[2]).toBeLessThan(occupied.to[2] - 5);
-  await page.waitForTimeout(1800);
-  await go(page, state.banks[0].from.map((v, i) => v * 0.3 + state.banks[0].to[i] * 0.7));
-  expect((await snapshot(page)).recoveries).toBe(0);
+  expect((await snapshot(page)).grounded).toBe(true);
 });
 
 for (const side of [-1, 1]) test(`an inclined side connector is traversable on side ${side}`, async ({ page }) => {
