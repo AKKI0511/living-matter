@@ -1,4 +1,5 @@
 import { expect, observeJump, test, type Page } from "./fixtures";
+import { walkWorld } from "./steering-helpers";
 
 type Snapshot = {
   time: number;
@@ -45,32 +46,7 @@ test("a fresh player walks the whole route, finishes and restarts", async ({
   });
   await begin(page);
   await page.screenshot({ path: info.outputPath("arrival.png") });
-  await walkTo(page, -5);
-  // Wait for the visible offer before leaving the initial shore.
-  await expect.poll(async () => (await snapshot(page)).states[0].phase).toBe("active");
-  await walkTo(page, -103);
-  await page.screenshot({ path: info.outputPath("terrace.png") });
-  expect((await snapshot(page)).recoveries).toBe(0);
-  await expect.poll(async () => (await snapshot(page)).states[2].phase).toBe("active");
-  if ((await snapshot(page)).states[2].kind === "platform") {
-    // A moving deck must be boarded during its near-shore dwell.
-    await expect
-      .poll(
-        async () => {
-          const s = await snapshot(page), p = s.states[2];
-          return (s.time - p.rideSince) % 18 < 1;
-        },
-        { timeout: 25_000, intervals: [80] },
-      )
-      .toBe(true);
-    await walkTo(page, -112.3, 6000);
-    await expect.poll(async () => (await snapshot(page)).player[2], { timeout: 20_000, intervals: [100] }).toBeLessThan(-128.8);
-  } else {
-    await walkTo(page, -128.8);
-  }
-  await page.screenshot({ path: info.outputPath("crossing.png") });
-  expect((await snapshot(page)).grounded).toBe(true);
-  await walkTo(page, -204, 40_000);
+  await walkWorld(page);
   await expect(
     page.getByRole("button", { name: /Wander again/ }),
   ).toBeVisible();
@@ -119,7 +95,7 @@ test("waiting to inspect a formation does not repeatedly dissolve it", async ({
   page,
 }) => {
   await begin(page);
-  await walkTo(page, -5);
+  await walkTo(page, -22.5);
   await expect
     .poll(async () => (await snapshot(page)).states[0].phase)
     .toBe("active");

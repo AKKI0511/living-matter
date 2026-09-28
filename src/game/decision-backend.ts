@@ -4,6 +4,8 @@ import {
   type DecisionSource,
   type Intervention,
 } from "./decisions";
+import { describeCandidate } from "./semantic";
+import { currentDirectionServed, decisionState } from "./decision-state";
 
 export const decisionBackend =
   process.env.NEXT_PUBLIC_DECISION_BACKEND === "jev" ? "jev" : "preview";
@@ -28,13 +30,12 @@ export class JevDecisions implements DecisionSource {
     if (!context.candidates.length) return { candidateId: null };
     const latest = context.observations.at(-1);
     if (!latest) return { candidateId: null };
+    if (currentDirectionServed(context.semantic)) return { candidateId: null, hold: true };
     const signature = JSON.stringify({
-      semantic: context.semantic,
+      semantic: context.semantic ? decisionState(context.semantic) : undefined,
       candidates: context.candidates.map((c) => ({
-        id: c.id,
-        route: c.route,
-        from: c.physical?.from,
-        to: c.physical?.to,
+        id: c.id, route: c.route, from: c.physical?.from, to: c.physical?.to,
+        meaning: c.physical ? describeCandidate(c, latest, !!context.semantic?.matter_now.player_supported_by_matter) : undefined,
       })),
       current: context.current,
     });
@@ -66,7 +67,8 @@ export class JevDecisions implements DecisionSource {
       this.signature = signature;
       this.expires =
         performance.now() +
-        Math.min(6000, Math.max(1500, result.recheckAfterMs ?? 2000));
+        // An unchanged hold needs less polling; new behavior or options changes the signature.
+        (result.hold ? 8000 : Math.min(6000, Math.max(1500, result.recheckAfterMs ?? 2000)));
       this.failures = 0;
       return result;
     } catch (error) {

@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { Canvas, useThree } from "@react-three/fiber";
 import { Physics } from "@react-three/rapier";
 import {
@@ -43,12 +43,17 @@ function Simulation() {
   const scene = useThree((s) => s.scene);
   const runtime = useMemo(() => createRuntime(), []);
   const phase = useGame((s) => s.phase);
+  const auditStarted = useRef(false);
   useEffect(() => {
-    if (!decisionAuditEnabled() || phase !== "playing") return;
+    if (!decisionAuditEnabled()) return;
+    const event = phase === "playing" ? auditStarted.current ? "resumed" : "started" : phase === "paused" ? "paused" : phase === "complete" ? "completed" : null;
+    if (!event || (!auditStarted.current && phase !== "playing")) return;
+    auditStarted.current = true;
     void fetch("/api/decision/session", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sessionId: runtime.sessionId }),
+      body: JSON.stringify({ sessionId: runtime.sessionId, event, simulationTime: runtime.time, recoveries: runtime.recoveries }),
+      keepalive: true,
     }).then((response) => {
       if (!response.ok) console.warn("Live session audit could not start.");
     }).catch(() => console.warn("Live session audit could not start."));

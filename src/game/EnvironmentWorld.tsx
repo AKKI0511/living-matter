@@ -16,7 +16,7 @@ import {
   type MeshStandardMaterial,
 } from "three";
 import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
-import { islands } from "./world";
+import { islands, WATER_LEVEL, architectureBoxes, columns, distantFragments } from "./world";
 import { useGame } from "./store";
 import { NightStars } from "./Constellation";
 import { BlackHole } from "./BlackHole";
@@ -146,15 +146,15 @@ function Sky() {
   );
 }
 
-function Water({ lake = false }: { lake?: boolean }) {
+function Water() {
   const mat = useRef<ShaderMaterial>(null);
   const uniforms = useMemo(
     () => ({
       time: { value: 0 },
       night: { value: 0 },
-      tint: { value: new Color(lake ? "#50767a" : "#244e5c") },
+      tint: { value: new Color("#244e5c") },
     }),
-    [lake],
+    [],
   );
   useFrame((_, dt) => {
     if (mat.current)
@@ -164,10 +164,10 @@ function Water({ lake = false }: { lake?: boolean }) {
   });
   const quality = useGame((s) => s.quality);
   const night = useGame((s) => s.night);
-  if (lake && quality === "high")
+  if (quality === "high")
     return (
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 5.14, -169]}>
-        <planeGeometry args={[46, 30]} />
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, WATER_LEVEL, -120]}>
+        <planeGeometry args={[1400, 1400]} />
         <MeshReflectorMaterial
           resolution={512}
           blur={[180, 50]}
@@ -186,9 +186,9 @@ function Water({ lake = false }: { lake?: boolean }) {
   return (
     <mesh
       rotation={[-Math.PI / 2, 0, 0]}
-      position={lake ? [0, 5.14, -169] : [0, -3, -120]}
+      position={[0, WATER_LEVEL, -120]}
     >
-      <planeGeometry args={lake ? [46, 30, 1, 1] : [1400, 1400, 1, 1]} />
+      <planeGeometry args={[1400, 1400, 1, 1]} />
       <shaderMaterial
         ref={mat}
         uniforms={uniforms}
@@ -214,11 +214,13 @@ function Water({ lake = false }: { lake?: boolean }) {
 
 function Landmark() {
   return (
-    <group position={[0, 6, -207]}>
-      <mesh position={[0, 16.5, -2]} castShadow receiveShadow>
-        <torusGeometry args={[15.5, 1.1, 16, 128]} />
-        <Stone />
-      </mesh>
+    <group position={[10, 6, -207]}>
+      <RigidBody type="fixed" colliders="trimesh">
+        <mesh position={[0, 16.5, -2]} castShadow receiveShadow>
+          <torusGeometry args={[15.5, 1.1, 16, 128]} />
+          <Stone />
+        </mesh>
+      </RigidBody>
       <mesh position={[0, 16.5, -0.88]}>
         <torusGeometry args={[15.5, 0.055, 6, 160]} />
         <meshBasicMaterial color={[5, 3.3, 1.4]} />
@@ -312,7 +314,6 @@ export function World() {
   return (
     <>
       <Water />
-      <Water lake />
       {islands.map((island, i) => (
         <group key={i}>
           <RigidBody type="fixed" colliders={false}>
@@ -331,7 +332,7 @@ export function World() {
           </RigidBody>
           <mesh
             position={[
-              0,
+              island.position[0],
               island.position[1] - island.size[1] / 2 - 6,
               island.position[2],
             ]}
@@ -346,7 +347,7 @@ export function World() {
           {/* A shallow brass inlay quietly carries the eye forward. */}
           <mesh
             position={[
-              0,
+              island.position[0],
               island.position[1] + island.size[1] / 2 + 0.008,
               island.position[2],
             ]}
@@ -363,7 +364,7 @@ export function World() {
             <mesh
               key={side}
               position={[
-                side * (island.size[0] / 2 - 0.35),
+                island.position[0] + side * (island.size[0] / 2 - 0.35),
                 island.position[1] + island.size[1] / 2 + 0.018,
                 island.position[2],
               ]}
@@ -375,52 +376,25 @@ export function World() {
           ))}
         </group>
       ))}
-      {/* Monumental fragments frame the route, with generous clear space around the player. */}
-      <RigidBody type="fixed" colliders="cuboid">
-        <mesh position={[-7.8, 5.5, -9]} castShadow receiveShadow>
-          <CutStone size={[1.8, 11, 2.5]} />
-          <Stone />
-        </mesh>
-        <mesh position={[7.8, 5.5, -9]} castShadow receiveShadow>
-          <CutStone size={[1.8, 11, 2.5]} />
-          <Stone />
-        </mesh>
-        <mesh position={[-2, 10.6, -9]} castShadow>
-          <CutStone size={[13.4, 1.5, 2.5]} />
-          <Stone />
-        </mesh>
-        <mesh position={[6.8, 5, -57]} castShadow receiveShadow>
-          <boxGeometry args={[1.6, 10, 9]} />
-          <Stone />
-        </mesh>
-        <mesh position={[-7.8, 11, -97]} castShadow receiveShadow>
-          <boxGeometry args={[1.5, 10, 14]} />
-          <Stone />
-        </mesh>
-        <mesh position={[7, 10, -142]} castShadow receiveShadow>
-          <boxGeometry args={[2, 8, 8]} />
-          <Stone />
-        </mesh>
-      </RigidBody>
-      {Array.from({ length: 10 }, (_, i) => {
-        const side = i % 2 ? -1 : 1,
-          z = 35 - i * 22.7,
-          x = side * (42 + Math.sin(i * 6.2) * 14 + i * 0.8),
-          height = 8 + (Math.sin(i * 32.8) + 1) * 19;
-        return (
-          <mesh
-            key={i}
-            position={[x, height / 2 - 9, z]}
-            rotation={[0, Math.sin(i * 3) * 0.35, 0]}
-            castShadow
-            receiveShadow
-          >
-            <boxGeometry args={[8 + (i % 5) * 3, height, 9 + (i % 3) * 4]} />
+      {architectureBoxes.map((box, i) => (
+        <RigidBody key={`architecture-${i}`} type="fixed" colliders={false}>
+          <CuboidCollider position={box.position} args={[box.size[0] / 2, box.size[1] / 2, box.size[2] / 2]} />
+          <mesh position={box.position} castShadow receiveShadow>
+            <CutStone size={box.size} />
+            <Stone />
+          </mesh>
+        </RigidBody>
+      ))}
+      {distantFragments.map((box, i) => (
+        <RigidBody key={`fragment-${i}`} type="fixed" colliders={false}>
+          <CuboidCollider position={box.position} rotation={box.rotation} args={[box.size[0] / 2, box.size[1] / 2, box.size[2] / 2]} />
+          <mesh position={box.position} rotation={box.rotation} castShadow receiveShadow>
+            <boxGeometry args={box.size} />
             <Stone dark={i % 3 === 0} />
           </mesh>
-        );
-      })}
-      <group position={[-51, 7, -95]} rotation={[0.15, 0.45, -0.32]}>
+        </RigidBody>
+      ))}
+      <group position={[-80, 7, -95]} rotation={[0.15, 0.45, -0.32]}>
         <mesh castShadow receiveShadow>
           <torusGeometry args={[18, 2.2, 8, 72, Math.PI * 1.65]} />
           <Stone dark />
@@ -430,22 +404,19 @@ export function World() {
           <meshStandardMaterial color="#b5a582" roughness={0.7} />
         </mesh>
       </group>
-      <group position={[48, 13, -228]} rotation={[0, -0.65, 0.17]}>
+      <group position={[80, 13, -228]} rotation={[0, -0.65, 0.17]}>
         <mesh castShadow receiveShadow>
           <torusGeometry args={[24, 2.4, 8, 80, Math.PI * 1.35]} />
           <Stone dark />
         </mesh>
       </group>
-      {Array.from({ length: 7 }, (_, i) => (
-        <mesh
-          key={`column-${i}`}
-          position={[-21, 5, -119 - i * 7]}
-          castShadow
-          receiveShadow
-        >
-          <cylinderGeometry args={[0.9, 1.15, 24 - i * 1.5, 12]} />
-          <Stone />
-        </mesh>
+      {columns.map((column, i) => (
+        <RigidBody key={`column-${i}`} type="fixed" colliders="hull">
+          <mesh position={column.position} castShadow receiveShadow>
+            <cylinderGeometry args={[column.topRadius, column.bottomRadius, column.height, 12]} />
+            <Stone />
+          </mesh>
+        </RigidBody>
       ))}
       <mesh position={[-125, 18, -270]} rotation={[0, -0.15, 0]}>
         <boxGeometry args={[130, 60, 35]} />

@@ -13,27 +13,32 @@ import {
   DynamicDrawUsage,
   InstancedMesh,
   Object3D,
-  Euler,
+  Matrix4,
+  Vector3,
   Quaternion,
 } from "three";
 import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
 import {
   FORMATION_SECONDS,
   MATTER_COUNT,
+  WEAVE_END_CAP,
   collisionBoxes,
   formationPose,
   platformOffset,
   sites,
   smooth,
 } from "./world";
-import { formMatter, semanticSnapshot, type Runtime } from "./runtime";
+import { formMatter, semanticSnapshot, currentObservation, decisionObservations, type Runtime } from "./runtime";
 import { availableCandidates, onPermanentGround } from "./affordances";
 import { sound } from "./audio";
 import { reportDecisionOutcome } from "./decision-audit-client";
+import { decisionMotionCurrent, samePhysicalCandidate } from "./decision-freshness";
 import { useGame } from "./store";
 import {
   applyWeave,
+  applySteeringCandidate,
   bankGeometry,
+  bankProgress,
   weaveBlend,
   weaveCandidates,
   weavePose,
@@ -55,7 +60,10 @@ export function Matter({ runtime }: { runtime: Runtime }) {
     } | null)[]
   >([null, null]);
   const bankQuaternion = useMemo(() => new Quaternion(), []);
-  const bankEuler = useMemo(() => new Euler(0, 0, 0, "YXZ"), []);
+  const bankMatrix = useMemo(() => new Matrix4(), []);
+  const bankNormal = useMemo(() => new Vector3(), []);
+  const bankBack = useMemo(() => new Vector3(), []);
+  const bankRight = useMemo(() => new Vector3(), []);
   const nextCheck = useRef(0),
     seenRevision = useRef(-1),
     transitionStart = useRef(0);
@@ -163,16 +171,21 @@ export function Matter({ runtime }: { runtime: Runtime }) {
       c.setEnabled(enabled);
       if (bank) {
         const g = bankGeometry(bank);
-        bankQuaternion.setFromEuler(bankEuler.set(g.slope, g.yaw, 0, "YXZ"));
+        const alongSlope = g.rise / g.run, crossSlope = bank.crossSlope ?? 0;
+        const ux = g.dx / g.run, uz = g.dz / g.run;
+        bankNormal.set(-ux * alongSlope + uz * crossSlope, 1, -uz * alongSlope - ux * crossSlope).normalize();
+        bankBack.set(-ux, -alongSlope, -uz).normalize();
+        bankRight.crossVectors(bankNormal, bankBack).normalize();
+        bankQuaternion.setFromRotationMatrix(bankMatrix.makeBasis(bankRight, bankNormal, bankBack));
         c.setHalfExtents({
-          x: 2.4,
+          x: 2.4 * Math.sqrt(1 + crossSlope ** 2 / (1 + alongSlope ** 2)),
           y: 0.15,
-          z: Math.hypot(g.run, g.rise) / 2 + 0.15,
+          z: Math.hypot(g.run, g.rise) / 2 + WEAVE_END_CAP,
         });
         c.setTranslationWrtParent({
-          x: (bank.from[0] + bank.to[0]) / 2,
-          y: (bank.from[1] + bank.to[1]) / 2 + 0.06 - Math.cos(g.slope) * 0.15,
-          z: (bank.from[2] + bank.to[2]) / 2,
+          x: (bank.from[0] + bank.to[0]) / 2 - bankNormal.x * 0.15,
+          y: (bank.from[1] + bank.to[1]) / 2 + 0.06 - bankNormal.y * 0.15,
+          z: (bank.from[2] + bank.to[2]) / 2 - bankNormal.z * 0.15,
         });
         c.setRotationWrtParent(bankQuaternion);
       }
@@ -271,7 +284,7 @@ export function Matter({ runtime }: { runtime: Runtime }) {
             ? bankPoses.current[bankIndex]!.yaw * t
             : !state
               ? Math.sin(runtime.time * 0.5 + i / 64) * 0.06
-              : 0),
+              : (pose?.yaw ?? 0) * t),
         arc * Math.cos(i) * 0.3,
       );
       dummy.updateMatrix();
@@ -284,6 +297,11 @@ export function Matter({ runtime }: { runtime: Runtime }) {
     )
       return;
     nextCheck.current = runtime.time + 0.3;
+    // No replacement can be useful while its support is still assembling.
+    if (state?.phase === "forming") {
+      runtime.diagnostics.decision = { reason: "matter_forming", time: runtime.time };
+      return;
+    }
     // While crossing, only an unoccupied half may be reallocated. No shore trigger or
     // inferred intent here: every continuation is passed through the selected source.
     if (
@@ -295,17 +313,28 @@ export function Matter({ runtime }: { runtime: Runtime }) {
     ) {
       const weave = runtime.weave;
       const options = weaveCandidates(weave, sites[index!], p, runtime.time);
+      runtime.diagnostics.decision = {
+        reason: options ? "weave_candidates" : "no_recyclable_weave_section",
+        time: runtime.time,
+        candidateCount: options?.candidates.length ?? 0,
+        player: [...p],
+        banks: weave.banks.map(bank => ({
+          segment: bank.segment,
+          ready: runtime.time - bank.since >= WEAVE_SECONDS,
+          ...bankProgress(bank, p),
+        })),
+      };
       if (!options) return;
       const revision = runtime.revision,
         bankRevision = weave.revision;
       const semantic = semanticSnapshot(runtime);
       if (!semantic) return;
-      const eventRevision = runtime.physicalHistory.revision;
-      const requestGaze = runtime.history.at(-1)?.gaze;
+      const requestObservation = currentObservation(runtime);
+      const recoveries = runtime.recoveries;
       void runtime.gate
         .requestResult({
           sessionId: runtime.sessionId,
-          observations: runtime.history.slice(),
+          observations: decisionObservations(runtime),
           semantic,
           candidates: options.candidates,
           current: { candidateId: runtime.activeCandidateId!, phase: "active" },
@@ -317,15 +346,19 @@ export function Matter({ runtime }: { runtime: Runtime }) {
           try {
           if (
             !result.valid ||
-            !result.candidate?.route ||
+            !result.candidate ||
+            (!result.candidate.route && result.candidate.weaveSegment === undefined) ||
             runtime.disposed ||
             useGame.getState().phase !== "playing" ||
             !runtime.grounded ||
             runtime.revision !== revision ||
-            weave.revision !== bankRevision ||
-            runtime.physicalHistory.revision !== eventRevision
+            weave.revision !== bankRevision
           )
             return;
+          if (runtime.recoveries !== recoveries || !decisionMotionCurrent(requestObservation, currentObservation(runtime))) {
+            reason = runtime.recoveries !== recoveries ? "player_recovered" : "behavior_changed";
+            return;
+          }
           const fresh = weaveCandidates(
             weave,
             sites[index!],
@@ -335,25 +368,19 @@ export function Matter({ runtime }: { runtime: Runtime }) {
           if (
             !fresh ||
             fresh.bank !== options.bank ||
-            fresh.segment !== options.segment ||
-            !fresh.candidates.some((c) => c.id === result.candidate!.id)
+            !fresh.candidates.some((c) => samePhysicalCandidate(result.candidate!, c))
           )
             return;
-          const gaze = runtime.history.at(-1)?.gaze;
-          if (
-            requestGaze &&
-            gaze &&
-            requestGaze.reduce((dot, v, a) => dot + v * gaze[a], 0) < 0.5
-          )
-            return;
-          applyWeave(
+          if (result.candidate.weaveSegment !== undefined) applySteeringCandidate(weave, fresh.bank, result.candidate, runtime.time);
+          else applyWeave(
             weave,
             fresh.bank,
             fresh.segment,
-            result.candidate.route,
+            result.candidate.route!,
             runtime.time,
           );
           runtime.activeCandidateId = result.candidate.id;
+          runtime.physicalHistory.clear();
           runtime.assistance.push({
             time: runtime.time,
             candidateId: result.candidate.id,
@@ -370,7 +397,10 @@ export function Matter({ runtime }: { runtime: Runtime }) {
       return;
     }
     // Only the engine's support/geometry checks constrain a decision. Behavior belongs to the source.
-    if (!runtime.grounded || !onPermanentGround(p)) return;
+    if (!runtime.grounded || !onPermanentGround(p)) {
+      runtime.diagnostics.decision = { reason: runtime.grounded ? "not_on_ground_or_weave" : "airborne", time: runtime.time, player: [...p] };
+      return;
+    }
     if (state && runtime.manualFormation) {
       const site = sites[index!];
       const reachedOtherShore = state.reverse
@@ -380,16 +410,17 @@ export function Matter({ runtime }: { runtime: Runtime }) {
     }
     const candidates = availableCandidates(p),
       revision = runtime.revision;
+    runtime.diagnostics.decision = { reason: candidates.length ? "ground_candidates" : "no_ground_candidates", time: runtime.time, candidateCount: candidates.length, player: [...p] };
     if (!candidates.length) return;
     const semantic = semanticSnapshot(runtime);
     if (!semantic) return;
     if (state && semantic.matter_now.player_supported_by_matter) return;
-    const eventRevision = runtime.physicalHistory.revision;
-    const requestGaze = runtime.history.at(-1)?.gaze;
+    const requestObservation = currentObservation(runtime);
+    const recoveries = runtime.recoveries;
     void runtime.gate
       .requestResult({
         sessionId: runtime.sessionId,
-        observations: runtime.history.slice(),
+        observations: decisionObservations(runtime),
         semantic,
         candidates,
         current: state
@@ -411,25 +442,20 @@ export function Matter({ runtime }: { runtime: Runtime }) {
           runtime.disposed ||
           useGame.getState().phase !== "playing" ||
           runtime.revision !== revision ||
-          runtime.physicalHistory.revision !== eventRevision ||
           !runtime.grounded ||
           !onPermanentGround(runtime.player) ||
           (state && semanticSnapshot(runtime)?.matter_now.player_supported_by_matter)
         )
           return;
-        const currentGaze = runtime.history.at(-1)?.gaze;
-        // A response to an obsolete view is stale, irrespective of the selected intervention.
-        if (
-          requestGaze &&
-          currentGaze &&
-          requestGaze.reduce((dot, v, a) => dot + v * currentGaze[a], 0) < 0.5
-        )
+        if (runtime.recoveries !== recoveries || !decisionMotionCurrent(requestObservation, currentObservation(runtime))) {
+          reason = runtime.recoveries !== recoveries ? "player_recovered" : "behavior_changed";
           return;
+        }
         const choice = result.candidate;
         const valid = choice
           ? availableCandidates(runtime.player).find((c) => c.id === choice.id)
           : null;
-        if (choice && !valid) return;
+        if (choice && (!valid || !samePhysicalCandidate(choice, valid))) return;
         if (
           state &&
           choice?.siteId === sites[index!].id &&
@@ -437,17 +463,13 @@ export function Matter({ runtime }: { runtime: Runtime }) {
           (state.kind !== "weave" ||
             runtime.weave?.banks.some(
               (b) =>
-                b.segment ===
-                (Math.hypot(
-                  p[0] - runtime.weave!.route[0][0],
-                  p[2] - runtime.weave!.route[0][2],
-                ) <
-                Math.hypot(
-                  p[0] - runtime.weave!.route[4][0],
-                  p[2] - runtime.weave!.route[4][2],
-                )
-                  ? 0
-                  : 3),
+                [b.from, b.to].some((endpoint, endIndex) => {
+                  if (Math.hypot(endpoint[0] - choice.physical!.from[0], endpoint[2] - choice.physical!.from[2]) >= 1.6) return false;
+                  const other = endIndex ? b.from : b.to, next = choice.route?.[1] ?? choice.physical!.to;
+                  const dx = other[0] - endpoint[0], dz = other[2] - endpoint[2];
+                  const nx = next[0] - choice.physical!.from[0], nz = next[2] - choice.physical!.from[2];
+                  return (dx * nx + dz * nz) / (Math.hypot(dx, dz) * Math.hypot(nx, nz)) > 0.9;
+                }),
             ))
         )
         {
@@ -483,7 +505,7 @@ export function Matter({ runtime }: { runtime: Runtime }) {
             runtime,
             i,
             choice.kind,
-            valid.physical!.from === sites[i].end,
+            valid.physical!.from[2] === sites[i].end[2],
             choice.route,
             choice.id,
           );

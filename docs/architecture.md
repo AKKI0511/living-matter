@@ -54,6 +54,8 @@ flowchart LR
 
 Rendering and physics continue while a decision is pending. A single instanced mesh draws the 512 matter pieces; simplified collision surfaces support the player. Frame updates use mutable state rather than React renders.
 
+Clear shore edges can launch routes anywhere within the shared world boundary. Only an unoccupied 256-piece half can rebuild. Side joins match the occupied surface's tilt, and solid obstacles constrain the offered steps before either backend selects one.
+
 ## A decision can expire
 
 ```mermaid
