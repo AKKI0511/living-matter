@@ -10,6 +10,8 @@
 
 Walk toward the light. Watch 512 pieces of matter gather into steps, bridges, and moving platforms. Turn around. Change your mind. See what follows.
 
+Leave from any clear shore edge. While standing on matter, turn toward open space to build your own route, climb, or circle back. The surrounding sea has a shared travel boundary.
+
 Switch to night for a living black hole and a constellation drawn from your journey. Headphones recommended.
 
 ## Play
@@ -45,6 +47,8 @@ NEXT_PUBLIC_JEV_SESSION_AUDIT=0
 ```
 
 Restart the dev server. Set the backend to `preview` to switch back. Live mode is experimental; [here is how it works, with example inputs and answers](docs/jev.md). To record a play session during development, set `NEXT_PUBLIC_JEV_SESSION_AUDIT=1` and restart. Auditing defaults to off and is disabled in production. Find a run with `pnpm jev:sessions --latest`, then [replay its decisions and curate eval data](docs/jev-session-audits.md). Local runs stay gitignored.
+
+In one completed, audited live play (2.43 minutes), Jev made 55 calls using 136,526 input tokens and 10,034 free output tokens. At the [Jev 1.13 rate](https://docs.typesafe.ai/models) of $0.042 per million input tokens, that was about **$0.0057 per play**, or **$0.0024 per minute**. This is a measured prototype run before the latest input reduction, not a fixed price for every player.
 
 ## Run a production build
 

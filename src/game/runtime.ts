@@ -8,6 +8,7 @@ import { decisionDeadlineMs } from "./decision-audit-mode";
 import { createWeave, weaveRoute, type Weave } from "./weave";
 import { sites, SPAWN, type FormationKind, type Vec3 } from "./world";
 import { PhysicalHistory, describeMatter, describePhysical, type PhysicalScene } from "./semantic";
+import { input } from "./input";
 
 export type MatterState = {
   kind: FormationKind;
@@ -80,7 +81,7 @@ export function physicalScene(runtime: Runtime): PhysicalScene {
 }
 
 export function semanticSnapshot(runtime: Runtime) {
-  const current = runtime.history.at(-1);
+  const current = currentObservation(runtime);
   if (!current) return undefined;
   const scene = physicalScene(runtime);
   const player_now = describePhysical(current, scene);
@@ -89,6 +90,20 @@ export function semanticSnapshot(runtime: Runtime) {
     recent_behavior_oldest_to_newest: runtime.physicalHistory.snapshot(player_now),
     matter_now: describeMatter(current, scene),
   };
+}
+
+/** Current physics and view intent, rather than a stale 200ms history sample. */
+export function currentObservation(runtime: Runtime): Observation | undefined {
+  const previous = runtime.history.at(-1);
+  return previous ? { ...previous, time: runtime.time, position: [...runtime.player],
+    velocity: [...runtime.velocity], grounded: runtime.grounded,
+    gaze: [-Math.sin(input.yaw) * Math.cos(input.pitch), Math.sin(input.pitch),
+      -Math.cos(input.yaw) * Math.cos(input.pitch)] } : undefined;
+}
+
+export function decisionObservations(runtime: Runtime) {
+  const current = currentObservation(runtime);
+  return current ? [...runtime.history.slice(-39), current] : runtime.history.slice();
 }
 
 export function formMatter(
@@ -100,6 +115,7 @@ export function formMatter(
   candidateId?: string,
 ) {
   runtime.gate.reset();
+  runtime.physicalHistory.clear();
   runtime.states.forEach((s) => {
     s.phase = "idle";
   });

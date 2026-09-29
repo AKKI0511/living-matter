@@ -19,6 +19,7 @@ import {
   weaveCandidates, weaveRoute,
 } from "../src/game/weave";
 import { sites, type Vec3 } from "../src/game/world";
+import { decisionState } from "../src/game/decision-state";
 
 const observation = (position: Vec3, motion: Vec3, gaze: Vec3, time: number, grounded = true): Observation => ({
   time, position, velocity: motion, gaze, grounded, activeStructure: null,
@@ -35,6 +36,7 @@ function reachContext() {
     observation([0, 0.825, -23], [0, 0, 0], [0, 0, -1], 7),
   ];
   for (const sample of samples) {
+    Object.assign(runtime, { player: sample.position, velocity: sample.velocity, grounded: sample.grounded, time: sample.time });
     runtime.history.push(sample);
     runtime.physicalHistory.record(sample, physicalScene(runtime));
   }
@@ -98,24 +100,94 @@ test("Jev receives one action Noul and one candidate Choice with no authored dir
   assert.equal(request.questions.best_candidate.type, "choice");
   const criteria = request.questions.best_candidate.criteria as Record<string, Record<string, string>>;
   assert.ok(Object.keys(criteria).length >= 2);
-  assert.ok(Object.values(criteria).some((c) => c.player_use === "walk on it under their own movement"));
-  assert.ok(Object.values(criteria).some((c) => c.player_use === "stand on it while it carries the player"));
-  assert.equal(JSON.stringify(request).includes("reach"), false);
+  assert.ok(Object.values(criteria).some((c) => c.player_use === "walk"));
+  assert.ok(Object.values(criteria).some((c) => c.player_use === "ride a moving deck"));
+  assert.equal(JSON.stringify(request).includes('"reach"'), false);
   assert.equal(JSON.stringify(request).includes("span"), false);
 });
 
-test("thresholds hold uncertainty, act on a clear Choice, and retract only off matter", () => {
+test("thresholds hold uncertainty and unused matter, and act on a clear Choice", () => {
   const context = reachContext();
   assert.equal(composeDecision(context, answers(0.59)).hold, true);
   assert.equal(composeDecision(context, answers(0.9, "candidate_0", 0.29)).hold, true);
   assert.equal(composeDecision(context, answers(0.9, "candidate_1")).candidateId, context.candidates[1].id);
   assert.equal(composeDecision(context, answers(0.9, "candidate_99")).hold, true);
   const existing = decisionSchema.parse({ ...context, current: { candidateId: context.candidates[0].id, phase: "active" }, semantic: { ...context.semantic, matter_now: { state: "active", player_supported_by_matter: false } } });
-  assert.ok(buildDecisionRequest(existing).questions.abandoned_current);
-  assert.equal(composeDecision(existing, answers(0.9, "candidate_0", 0.8, 0.81)).candidateId, null);
+  assert.equal(buildDecisionRequest(existing).questions.abandoned_current, undefined);
+  assert.equal(composeDecision(existing, answers(0.2, "candidate_0", 0.8, 0.81)).hold, true);
+  assert.equal(composeDecision(existing, answers(0.9, "candidate_0", 0.8, 0.81)).candidateId, context.candidates[0].id);
   assert.equal(composeDecision(existing, answers(0.9, "candidate_0", 0.8, 0.79)).candidateId, context.candidates[0].id);
   const occupied = decisionSchema.parse({ ...existing, semantic: { ...existing.semantic, matter_now: { state: "active", player_supported_by_matter: true } } });
   assert.equal(buildDecisionRequest(occupied).questions.abandoned_current, undefined);
+});
+
+test("a side-rim branch can be chosen independently of forward traversal need", () => {
+  const original = reachContext();
+  const context = decisionSchema.parse({ ...original, semantic: {
+    ...original.semantic,
+    player_now: { ...original.semantic.player_now, support: "living matter", position_on_support: "at an edge", facing_into: "living matter" },
+    matter_now: { state: "active", player_supported_by_matter: true },
+  } });
+  assert.equal(buildDecisionRequest(context).questions.branch_intent.type, "noul");
+  const judgment = { ...answers(0.35, "candidate_0", 0.8), branch_intent: { type: "noul", noul: 0.85 } } as Answers;
+  assert.equal(composeDecision(context, judgment).candidateId, context.candidates[0].id);
+});
+
+test("an upward request at a matter edge can select a ramp despite existing level support", () => {
+  const original = reachContext();
+  const context = decisionSchema.parse({ ...original, semantic: {
+    ...original.semantic,
+    player_now: { ...original.semantic.player_now, support: "living matter", position_on_support: "at an edge", facing_into: "living matter", view_height: "looking upward" },
+    matter_now: { state: "active", player_supported_by_matter: true },
+  } });
+  assert.equal(buildDecisionRequest(context).questions.height_intent.type, "noul");
+  const judgment = { ...answers(0.3, "candidate_0", 0.8), branch_intent: { type: "noul", noul: 0.2 }, height_intent: { type: "noul", noul: 0.84 } } as Answers;
+  assert.equal(composeDecision(context, judgment).candidateId, context.candidates[0].id);
+});
+
+test("water-edge actions describe distinct paths and distant approaches accurately", () => {
+  const sample = observation([-0.7, 6.825, -153.3], [0, 0, 0], [0, 0, -1], 100);
+  const originalGeometry = sites.map(s => ({ ...s, start: [0, s.start[1], s.start[2]] as Vec3, end: [0, s.end[1], s.end[2]] as Vec3, steering: false }));
+  const candidates = availableCandidates(sample.position, originalGeometry);
+  const descriptions = candidates.map((c) => describeCandidate(c, sample, false));
+  const water = candidates.flatMap((c, i) => c.kind === "weave" && c.physical?.medium === "water" ? [descriptions[i]] : []);
+  assert.equal(water.length, 3);
+  assert.equal(new Set(water.map((d) => JSON.stringify(d))).size, 3);
+  assert.deepEqual(water.map((d) => d.heading), ["ahead-left", "ahead", "ahead-right"]);
+  assert.ok(water.every((d) => d.vertical_change === "higher"));
+  assert.ok(descriptions.every((d) => !d.starts_from.startsWith("far from the player")));
+});
+
+test("no-match holds when the offered continuation is in the wrong direction", () => {
+  const context = reachContext();
+  assert.equal(composeDecision(context, answers(0.9, "none", 0.9)).hold, true);
+});
+
+test("identical descriptions do not split Choice probability and retained indices map exactly", () => {
+  const original = reachContext();
+  const candidates = [...original.candidates];
+  candidates.splice(2, 0, { ...candidates[1], id: "alias:identical" });
+  const context = decisionSchema.parse({ ...original, candidates });
+  const criteria = buildDecisionRequest(context).questions.best_candidate.criteria as Record<string, unknown>;
+  assert.equal("candidate_2" in criteria, false);
+  assert.equal(composeDecision(context, answers(0.9, "candidate_2")).hold, true);
+  assert.equal(composeDecision(context, answers(0.9, "candidate_3")).candidateId, candidates[3].id);
+  assert.equal(new Set(Object.values(criteria).map(v => JSON.stringify(v))).size, Object.keys(criteria).length);
+});
+
+test("shared Choice facts are sent once implicitly while distinguishing geometry remains", () => {
+  const original = reachContext();
+  const candidates = original.candidates.filter(candidate => candidate.kind !== "platform");
+  const context = decisionSchema.parse({ ...original, candidates });
+  const criteria = buildDecisionRequest(context).questions.best_candidate.criteria as Record<string, Record<string, string>>;
+  const options = Object.entries(criteria).filter(([key]) => key !== "none");
+  assert.ok(options.length > 1);
+  assert.ok(options.every(([, option]) => !("player_use" in option)));
+  assert.ok(options.some(([, option]) => "view_offset_degrees" in option));
+  assert.equal(new Set(options.map(([, option]) => JSON.stringify(option))).size, options.length);
+  const selected = options.at(-1)![0];
+  assert.equal(composeDecision(context, answers(0.9, selected)).candidateId,
+    candidates[Number(selected.slice("candidate_".length))].id);
 });
 
 test("SDK batches the exact state and questions in one mocked request", async () => {
@@ -128,7 +200,7 @@ test("SDK batches the exact state and questions in one mocked request", async ()
     fetch: async (_url, init) => {
       calls++;
       const body = JSON.parse(init!.body as string);
-      assert.deepEqual(body.state, context.semantic);
+      assert.deepEqual(body.state, decisionState(context.semantic));
       assert.deepEqual(Object.keys(body.questions), ["action_needed", "best_candidate"]);
       assert.equal(body.questions.best_candidate.type, "choice");
       assert.equal(body.state.observations, undefined);
@@ -167,7 +239,7 @@ test("server endpoint composes a mocked Jev response without a live call", async
     globalThis.fetch = async (_input, init) => {
       calls++;
       const body = JSON.parse(init!.body as string);
-      assert.deepEqual(body.state, context.semantic);
+      assert.deepEqual(body.state, decisionState(context.semantic));
       assert.equal(body.model, "jev-1.13.0");
       assert.equal(body.questions.best_candidate.type, "choice");
       return Response.json({ model: "jev-1.13.0", usage: { input_tokens: 300, output_tokens: 40 }, answers: answers(0.91, "candidate_2", 0.8), request_id: "mock-provider-request", evaluation_time_ms: 143.4 });
@@ -182,19 +254,28 @@ test("server endpoint composes a mocked Jev response without a live call", async
 
     process.env.NEXT_PUBLIC_JEV_SESSION_AUDIT = "1";
     assert.equal(decisionDeadlineMs(), 5000);
-    const started = await startSession(new Request("http://localhost:3000/api/decision/session", { method: "POST", body: JSON.stringify({ sessionId: context.sessionId }) }));
+    // pnpm dev binds to 0.0.0.0; the browser addresses localhost.
+    const browserHeaders = { host: "localhost:3000", origin: "http://localhost:3000", "Content-Type": "application/json" };
+    const rejectedHeaders = { ...browserHeaders, origin: "http://other.example:3000" };
+    const { POST: outcome } = await import("../src/app/api/decision/outcome/route");
+    for (const [path, route] of [["session", startSession], ["", POST], ["outcome", outcome]] as const) {
+      const rejected = await route(new Request(`http://0.0.0.0:3000/api/decision/${path}`, { method: "POST", headers: rejectedHeaders, body: "{}" }));
+      assert.equal(rejected.status, 403);
+    }
+    assert.equal(calls, 1);
+    assert.deepEqual(await readdir(auditRoot), []);
+    const started = await startSession(new Request("http://0.0.0.0:3000/api/decision/session", { method: "POST", headers: browserHeaders, body: JSON.stringify({ sessionId: context.sessionId }) }));
     assert.equal(started.status, 200);
-    const response = await POST(new Request("http://localhost:3000/api/decision", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(context) }));
+    const response = await POST(new Request("http://0.0.0.0:3000/api/decision", { method: "POST", headers: browserHeaders, body: JSON.stringify(context) }));
     assert.equal(response.status, 200);
     const decision = await response.json();
     assert.equal(decision.candidateId, context.candidates[2].id);
     assert.match(decision.auditId, /^[0-9a-f-]{36}$/);
-    const { POST: outcome } = await import("../src/app/api/decision/outcome/route");
-    const reported = await outcome(new Request("http://localhost:3000/api/decision/outcome", { method: "POST", body: JSON.stringify({ sessionId: context.sessionId, auditId: decision.auditId, status: "applied", reason: "form_created", browserRoundTripMs: 250 }) }));
+    const reported = await outcome(new Request("http://0.0.0.0:3000/api/decision/outcome", { method: "POST", headers: browserHeaders, body: JSON.stringify({ sessionId: context.sessionId, auditId: decision.auditId, status: "applied", reason: "form_created", browserRoundTripMs: 250 }) }));
     assert.equal(reported.status, 200);
     const callDir = join(auditRoot, context.sessionId, "calls", decision.auditId);
     const savedRequest = JSON.parse(await readFile(join(callDir, "jev-request.json"), "utf8"));
-    assert.deepEqual(savedRequest.state, context.semantic);
+    assert.deepEqual(savedRequest.state, decisionState(context.semantic));
     const savedResponse = JSON.parse(await readFile(join(callDir, "jev-response.json"), "utf8"));
     assert.equal(savedResponse.request_id, "mock-provider-request");
     assert.equal(savedResponse.evaluation_time_ms, 143.4);
@@ -242,20 +323,32 @@ test("egocentric descriptions rotate and mirror without changing physical meanin
   assert.equal(describePhysical(a, scene).support, "permanent ground");
 });
 
+test("a visible landing beyond a missing connection is not sufficient support", () => {
+  for (const end of [-44, -45.2]) {
+    const weave = createWeave([[-14, 0, -38], [-14, 0, end], [-14, 0, -50]], 0);
+    weave.banks[1] = { ...weave.banks[1], from: [25, 0, -44], to: [25, 0, -50] };
+    const scene = { time: 5, activeSite: 0, phase: "active" as const, kind: "weave", weave };
+    const event = describePhysical(observation([-14, 0.885, -43.5], [0, 0, 0], [0, 0, -1], 5), scene);
+    assert.equal(event.support, "living matter");
+    assert.equal(event.facing_into, end === -44 ? "open air" : "walkable ground");
+  }
+});
+
 test("occupied weave remains protected while the free section can rebuild behind or ahead", () => {
-  const weave = createWeave(weaveRoute(sites[0]), 0);
+  const site = { ...sites[0], end: [0, 0, -45] as Vec3, steering: false };
+  const weave = createWeave(weaveRoute(site), 0);
   const occupied = weave.banks[1];
   const p: Vec3 = [0, 2.085, -32.5];
   assert.ok(bankProgress(occupied, p).supported);
   assert.equal(describePhysical(observation(p, [0, 0, 0], [0, 0, 1], 4), { time: 4, activeSite: 0, phase: "active", kind: "weave", weave }).facing_into, "living matter");
-  const next = weaveCandidates(weave, sites[0], p, 4)!;
+  const next = weaveCandidates(weave, site, p, 4)!;
   assert.equal(next.bank, 0);
   assert.equal(next.candidates.length, 3);
   applyWeave(weave, next.bank, next.segment, next.candidates[1].route!, 4);
   assert.equal(weave.banks[1], occupied);
   const guarded = guardWeaveEdge(weave, [0, 2.085, -34.55], [0, -0.01, -0.1], 4.2);
   assert.equal(guarded[2], 0);
-  const back = weaveCandidates(weave, sites[0], p, 7)!;
+  const back = weaveCandidates(weave, site, p, 7)!;
   assert.equal(back.segment, 0);
   assert.equal(back.bank, 0);
   assert.equal(back.candidates[0].physical!.to[2], -25);
@@ -263,7 +356,31 @@ test("occupied weave remains protected while the free section can rebuild behind
   const state = describeMatter(observation(p, [0, 0, 0], facing, 7), { time: 7, activeSite: 0, phase: "active", kind: "weave", weave });
   assert.equal(state.player_supported_by_matter, true);
   assert.equal(state.reusable_section_relative_to_player, "behind");
-  assert.equal(describeCandidate(back.candidates[0], observation(p, [0, 0, 0], facing, 7), true).extends, "ahead of the player's current facing");
+  assert.equal(describeCandidate(back.candidates[0], observation(p, [0, 0, 0], facing, 7), true).extends, "ahead");
+});
+
+test("sideways choices in either direction preserve the occupied bank and do not change height", () => {
+  const site = { ...sites[0], steering: false };
+  for (const segment of [1, 2]) {
+    const route = weaveRoute(sites[0]);
+    const weave = createWeave(route, 0);
+    // Give the occupied bank one existing neighbor, so the other direction is missing.
+    weave.banks = [
+      { segment, from: route[segment], to: route[segment + 1], since: 0, version: 0 },
+      { segment: segment === 1 ? 0 : 3, from: route[segment === 1 ? 0 : 3], to: route[segment === 1 ? 1 : 4], since: 0, version: 0 },
+    ];
+    const p = route[segment].map((v, i) => (v + route[segment + 1][i]) / 2 + (i === 1 ? 0.885 : 0)) as Vec3;
+    const occupied = weave.banks[0];
+    const options = weaveCandidates(weave, site, p, 5)!;
+    assert.equal(options.candidates.length, 3);
+    assert.equal(new Set(options.candidates.map((c) => c.physical!.to[1])).size, 1);
+    for (const c of options.candidates) {
+      assert.deepEqual(c.route![segment], occupied.from);
+      assert.deepEqual(c.route![segment + 1], occupied.to);
+    }
+    applyWeave(weave, options.bank, options.segment, options.candidates[0].route!, 5);
+    assert.equal(weave.banks[0], occupied);
+  }
 });
 
 test("reset invalidates a pending response after direction changes", async () => {

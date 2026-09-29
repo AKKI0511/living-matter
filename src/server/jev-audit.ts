@@ -109,13 +109,17 @@ async function refreshSummary(sessionId: string) {
   const attempted = names.filter((entry) => entry.isDirectory()).length;
   const audits: JsonRecord[] = [];
   const outcomes: JsonRecord[] = [];
-  for (const entry of names) {
-    if (!entry.isDirectory()) continue;
-    const call = callDirectory(sessionId, entry.name);
-    const audit = await readJson(join(call, "audit.json"));
-    if (audit) audits.push(audit);
-    const outcome = await readJson(join(call, "game-outcome.json"));
-    if (outcome) outcomes.push(outcome);
+  const directories = names.filter((entry) => entry.isDirectory());
+  // Audit must finish before replying, but past calls need not be read serially.
+  for (let i = 0; i < directories.length; i += 16) {
+    const records = await Promise.all(directories.slice(i, i + 16).map(async (entry) => {
+      const call = callDirectory(sessionId, entry.name);
+      return Promise.all([readJson(join(call, "audit.json")), readJson(join(call, "game-outcome.json"))]);
+    }));
+    for (const [audit, outcome] of records) {
+      if (audit) audits.push(audit);
+      if (outcome) outcomes.push(outcome);
+    }
   }
   const successful = audits.filter((audit) => audit.status === "success");
   const failed = audits.filter((audit) => audit.status === "error");
@@ -132,10 +136,26 @@ async function refreshSummary(sessionId: string) {
   for (const outcome of outcomes) {
     if (typeof outcome.status === "string") outcomeCounts[outcome.status] = (outcomeCounts[outcome.status] ?? 0) + 1;
   }
+  const lifecycle = await readJson(join(directory, "lifecycle.json"));
+  const events = (lifecycle?.events ?? []) as JsonRecord[];
+  const completed = events.findLast(event => event.event === "completed");
+  let playingWallMs = 0, playingSince: number | null = null;
+  for (const event of events) {
+    const time = Date.parse(String(event.recorded_at));
+    if ((event.event === "started" || event.event === "resumed") && playingSince === null) playingSince = time;
+    if ((event.event === "paused" || event.event === "completed") && playingSince !== null) {
+      playingWallMs += Math.max(0, time - playingSince);
+      playingSince = null;
+    }
+  }
   const summary = {
     schema_version: 1,
     session_id: sessionId,
     updated_at: new Date().toISOString(),
+    completed_at: completed?.recorded_at ?? null,
+    simulation_seconds: numberOrNull(completed?.simulation_time ?? events.at(-1)?.simulation_time),
+    playing_wall_seconds: completed ? playingWallMs / 1000 : null,
+    recoveries: numberOrNull(completed?.recoveries ?? events.at(-1)?.recoveries),
     attempted_calls: attempted,
     completed_calls: audits.length,
     pending_calls: attempted - audits.length,
@@ -202,6 +222,20 @@ export async function beginJevCall(sessionId: string, request: JsonRecord, gameC
 export async function startJevSession(sessionId: string) {
   return withSessionLock(sessionId, async () => {
     await ensureSession(sessionId);
+    return refreshSummary(sessionId);
+  });
+}
+
+export async function recordJevSessionEvent(sessionId: string, detail: {
+  event: "started" | "paused" | "resumed" | "completed"; simulationTime?: number; recoveries?: number;
+}) {
+  return withSessionLock(sessionId, async () => {
+    const directory = await ensureSession(sessionId);
+    const path = join(directory, "lifecycle.json");
+    const lifecycle = await readJson(path);
+    const events = (lifecycle?.events ?? []) as JsonRecord[];
+    events.push({ event: detail.event, recorded_at: new Date().toISOString(), simulation_time: detail.simulationTime ?? null, recoveries: detail.recoveries ?? null });
+    await writeJson(path, { schema_version: 1, session_id: sessionId, events });
     return refreshSummary(sessionId);
   });
 }

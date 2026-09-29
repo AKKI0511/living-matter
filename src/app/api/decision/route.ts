@@ -6,6 +6,7 @@ import {
 } from "@/server/decision-request";
 import { beginJevCall, completeJevCall } from "@/server/jev-audit";
 import { decisionAuditEnabled } from "@/game/decision-audit-mode";
+import { decisionOriginAllowed } from "@/server/decision-origin";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -21,8 +22,7 @@ export async function POST(request: Request) {
     return reply({ error: "Live backend disabled" }, 409);
   if (!process.env.TYPESAFE_API_KEY)
     return reply({ error: "Set TYPESAFE_API_KEY on the server" }, 503);
-  const origin = request.headers.get("origin");
-  if (origin && origin !== new URL(request.url).origin)
+  if (!decisionOriginAllowed(request))
     return reply({ error: "Origin rejected" }, 403);
   if (Date.now() - windowStart > 60000) {
     requests = 0;

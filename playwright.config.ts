@@ -20,7 +20,7 @@ export default defineConfig({
     // and failure screenshots without snapshots or screencasting every frame.
     trace: { mode: "retain-on-failure", screenshots: !process.env.CI, snapshots: !process.env.CI, sources: true },
   },
-  webServer: {
+  webServer: process.env.PLAYTEST_URL ? undefined : {
     command: "pnpm dev",
     url: "http://localhost:3000",
     reuseExistingServer: !process.env.CI,

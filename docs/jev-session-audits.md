@@ -10,6 +10,7 @@ Start with `pnpm jev:sessions --latest` for the newest run, or `pnpm jev:session
 jev-sessions/<session-id>/
   session.json                 Start time, Git revision, policy and pricing snapshot
   summary.json                 Auto-updated run totals
+  lifecycle.json               Started, paused, resumed and completed play events
   calls/<call-id>/
     started.json               Sequence, call ID, request hash, policy and wall-clock start
     game-context.json          Raw observations and legal candidates from the game
@@ -21,6 +22,8 @@ jev-sessions/<session-id>/
 ```
 
 The game creates `jev-request.json` before making the provider call. A failed or interrupted call can therefore leave a folder without `audit.json`; `summary.json` counts those as pending. A provider failure without usage is marked **cost unknown**, since a timeout does not prove the provider billed nothing. Calls whose model is absent from the local price table are also marked cost unknown.
+
+Completed runs include simulation duration, completion time, active wall time and recoveries in the summary. Older recordings without lifecycle events cannot establish an exact completion duration from their final decision alone.
 
 For Jev 1.13, the cost estimate uses the [TypeSafe model price](https://docs.typesafe.ai/models): $0.042 per million input tokens, output tokens free, checked 2026-09-27. Each call records the rate and source used. The estimate may differ from the account bill if credits or custom pricing apply. `audit.json` records provider round-trip time, server time, and model evaluation time when Jev supplies it. `game-outcome.json` records browser round-trip time and the game's final handling of the decision.
 

@@ -1,4 +1,4 @@
-import { collisionBoxes, islands, sites, type Vec3 } from "./world";
+import { collisionBoxes, islands, sites, boxCoordinates, WEAVE_END_CAP, type Vec3 } from "./world";
 import { bankProgress, WEAVE_SECONDS, type Weave } from "./weave";
 import type { Candidate, Observation } from "./decisions";
 
@@ -8,6 +8,7 @@ export type PhysicalEvent = {
   position_on_support?: string;
   facing_into?: string;
   surface_beyond_facing?: string;
+  view_height?: string;
 };
 export type MatterDescription = {
   state: "idle" | "forming" | "active";
@@ -62,25 +63,23 @@ export function matterSupport(p: Vec3, grounded: boolean, scene: PhysicalScene) 
   if (!grounded || scene.activeSite === null || scene.phase !== "active") return false;
   if (scene.kind === "weave") return !!scene.weave?.banks.some((b) => bankProgress(b, p).supported);
   const site = sites[scene.activeSite], offset = scene.offset ?? [0, 0, 0];
-  return collisionBoxes(site, scene.kind as Exclude<typeof site.candidates[number], "weave">).some((b) =>
-    Math.abs(p[0] - b.position[0] - offset[0]) <= b.size[0] / 2 + 0.2 &&
-    Math.abs(p[2] - b.position[2] - offset[2]) <= b.size[2] / 2 + 0.2 &&
-    Math.abs(p[1] - (scene.kind === "stairs"
-      ? site.start[1] + (site.end[1] - site.start[1]) * ((site.start[2] - p[2]) / (site.start[2] - site.end[2])) + 0.825
-      : b.position[1] + offset[1] + b.size[1] / 2 + 0.825)) < 0.6,
-  );
+  return collisionBoxes(site, scene.kind as Exclude<typeof site.candidates[number], "weave">).some((b) => {
+    const local = boxCoordinates([p[0], p[1] - 0.825, p[2]], b, offset);
+    return Math.abs(local[0]) <= b.size[0] / 2 + 0.2 && Math.abs(local[2]) <= b.size[2] / 2 + 0.2 && Math.abs(local[1] - b.size[1] / 2) < 0.6;
+  });
 }
 function matterAhead(p: Vec3, scene: PhysicalScene) {
   if (scene.activeSite === null || scene.phase !== "active") return false;
   if (scene.weave) return scene.weave.banks.some((b) => {
     const progress = bankProgress(b, p);
-    return scene.time - b.since >= WEAVE_SECONDS && progress.t >= 0 && progress.t <= 1 && progress.across < 2.15;
+    const cap = WEAVE_END_CAP / Math.hypot(b.to[0] - b.from[0], b.to[2] - b.from[2]);
+    return scene.time - b.since >= WEAVE_SECONDS && progress.t >= -cap && progress.t <= 1 + cap && progress.across < 2.15;
   });
   const site = sites[scene.activeSite], offset = scene.offset ?? [0, 0, 0];
-  return collisionBoxes(site, scene.kind as Exclude<typeof site.candidates[number], "weave">).some((b) =>
-    Math.abs(p[0] - b.position[0] - offset[0]) <= b.size[0] / 2 &&
-    Math.abs(p[2] - b.position[2] - offset[2]) <= b.size[2] / 2,
-  );
+  return collisionBoxes(site, scene.kind as Exclude<typeof site.candidates[number], "weave">).some((b) => {
+    const local = boxCoordinates([p[0], b.position[1] + offset[1], p[2]], b, offset);
+    return Math.abs(local[0]) <= b.size[0] / 2 && Math.abs(local[2]) <= b.size[2] / 2;
+  });
 }
 function motion(o: Observation) {
   if (!o.grounded) return o.velocity[1] > 1 ? "jumping" : "falling";
@@ -93,10 +92,14 @@ export function describePhysical(o: Observation, scene: PhysicalScene): Physical
   const p = o.position, gaze = flat(o.gaze), onMatter = matterSupport(p, o.grounded, scene);
   const ground = permanentSupport(p);
   const event: PhysicalEvent = { support: onMatter ? "living matter" : o.grounded && ground ? "permanent ground" : "unsupported", motion: motion(o) };
+  event.view_height = o.gaze[1] > 0.15 ? "looking upward" : o.gaze[1] < -0.15 ? "looking downward" : "looking roughly level";
   let edgeDistance = Infinity;
   if (onMatter && scene.weave) {
     const progress = scene.weave.banks.map((b) => bankProgress(b, p)).find((v) => v.supported);
-    if (progress) edgeDistance = Math.min(progress.t, 1 - progress.t) * 5;
+    if (progress) {
+      const bank = scene.weave.banks.find((b) => bankProgress(b, p).supported)!;
+      edgeDistance = Math.min(Math.min(progress.t, 1 - progress.t) * Math.hypot(bank.to[0] - bank.from[0], bank.to[2] - bank.from[2]), 2.4 - progress.across);
+    }
   } else if (ground) {
     edgeDistance = Math.min(
       ground.size[0] / 2 - Math.abs(p[0] - ground.position[0]),
@@ -109,9 +112,20 @@ export function describePhysical(o: Observation, scene: PhysicalScene): Physical
   const facingPoint: Vec3 = [p[0] + gaze[0] * 4, p[1], p[2] + gaze[2] * 4];
   const aheadGround = permanentSupport(facingPoint);
   const aheadMatter = matterAhead(facingPoint, scene);
-  event.facing_into = aheadMatter ? "living matter" : aheadGround ? "walkable ground" : "open air";
+  // A landing beyond a gap is not continuous support. Sampling only the point
+  // four units ahead told both backends to hold at unfinished shore connections.
+  let continuous = !!(aheadGround || aheadMatter);
+  for (let i = 1; continuous && i <= 40; i++) {
+    const point: Vec3 = [p[0] + gaze[0] * i / 10, p[1], p[2] + gaze[2] * i / 10];
+    if (!permanentSupport(point) && !matterAhead(point, scene)) continuous = false;
+  }
+  event.facing_into = continuous && aheadMatter ? "living matter" : continuous && aheadGround ? "walkable ground" : "open air";
   if (event.facing_into === "open air") {
-    const target = sites.flatMap((site) => [site.start, site.end]).find((end) => {
+    const target = islands.map(b => [
+      Math.max(b.position[0] - b.size[0] / 2, Math.min(b.position[0] + b.size[0] / 2, p[0] + gaze[0] * 20)),
+      b.position[1] + b.size[1] / 2,
+      Math.max(b.position[2] - b.size[2] / 2, Math.min(b.position[2] + b.size[2] / 2, p[2] + gaze[2] * 20)),
+    ] as Vec3).find((end) => {
       const dx = end[0] - p[0], dz = end[2] - p[2], distance = Math.hypot(dx, dz);
       return distance > 5 && distance < 42 && (dx * gaze[0] + dz * gaze[2]) / distance > 0.78 && Math.abs(end[1] + 0.825 - p[1]) < 8;
     });
@@ -141,21 +155,29 @@ export function describeCandidate(candidate: Candidate, o: Observation, supporte
   const p = candidate.physical!;
   const end = candidate.route && !supported ? candidate.route[1] : p.to;
   const direction = relativeDirection(o.position, end, o.gaze);
-  if (candidate.kind === "platform") return {
-    matter_change: "form a moving deck",
-    player_use: "stand on it while it carries the player",
-    starts_from: "beside the player's current support",
-    travels: `through the open space ${direction}`,
-    ends_at: `separate walkable ground ${heightWord(p.rise)}`,
-  };
+  const headingAngle = Math.atan2(
+    o.gaze[0] * (end[2] - p.from[2]) - o.gaze[2] * (end[0] - p.from[0]),
+    o.gaze[0] * (end[0] - p.from[0]) + o.gaze[2] * (end[2] - p.from[2]),
+  );
   return {
-    matter_change: supported ? "reuse the unoccupied section as the next walkable section" : "form a walkable section",
-    player_use: "walk on it under their own movement",
-    starts_from: supported ? "the section currently supporting the player" : "the player's current support",
-    extends: `${direction} of the player's current facing`,
-    vertical_change: heightWord(p.rise),
-    environment: p.medium === "water" ? "over water" : "over open air",
-    ...(supported ? { occupied_support: "remains unchanged" } : {}),
+    player_use: candidate.kind === "platform" ? "ride a moving deck" : "walk",
+    ...(candidate.attachment ? { attachment: candidate.attachment === "middle" ? "side rim" : "end" } : {}),
+    ...(candidate.turnDegrees ? { path_shape: `${Math.abs(candidate.turnDegrees)} degree ${candidate.turnDegrees > 0 ? "right" : "left"} turn` } : {}),
+    starts_from: relativeDirection(o.position, p.from, o.gaze),
+    attachment_distance_units: p.distance.toFixed(1),
+    extends: direction,
+    heading: relativeDirection(p.from, end, o.gaze),
+    view_offset_degrees: `${Math.round(Math.abs(headingAngle) * 180 / Math.PI)} ${headingAngle < 0 ? "left" : "right"}`,
+    vertical_change: heightWord(end[1] - p.from[1]),
+    length_units: Math.hypot(end[0] - p.from[0], end[2] - p.from[2]).toFixed(1),
+    rise_units: (end[1] - p.from[1]).toFixed(1),
+    ...(candidate.route ? { path_shape: (() => {
+      const a = candidate.route[0], b = candidate.route.at(-1)!;
+      const run = Math.hypot(b[0] - a[0], b[2] - a[2]) || 1;
+      const offset = ((end[0] - a[0]) * -(b[2] - a[2]) + (end[2] - a[2]) * (b[0] - a[0])) / run;
+      return Math.abs(offset) < 0.5 ? "straight" : `${offset > 0 ? "right" : "left"} of shore line`;
+    })() } : {}),
+    ends_at: permanentSupport([end[0], end[1] + 0.825, end[2]]) ? "ground" : "open space",
   };
 }
 export class PhysicalHistory {
@@ -166,12 +188,17 @@ export class PhysicalHistory {
   private airborne: "jumping" | "falling" | null = null;
   private takeoffSupport: string | null = null;
   revision = 0;
+  clear() {
+    this.events = []; this.last = null; this.lastGaze = null;
+    this.lastSupportIdentity = null; this.airborne = null; this.takeoffSupport = null;
+    this.revision++;
+  }
   record(o: Observation, scene: PhysicalScene, recovered = false) {
     const now = describePhysical(o, scene);
-    if (this.last?.support === "living matter" && now.support === "living matter" &&
+    const turned = this.last?.support === "living matter" && now.support === "living matter" &&
       this.last.motion === "standing" && now.motion === "standing" &&
-      this.lastGaze && flat(this.lastGaze).reduce((sum, value, i) => sum + value * flat(o.gaze)[i], 0) < 0.3)
-      this.push({ ...now, motion: "turned around and stopped" });
+      this.lastGaze && flat(this.lastGaze).reduce((sum, value, i) => sum + value * flat(o.gaze)[i], 0) < 0.82;
+    if (turned) this.push({ ...now, motion: now.facing_into === "open air" ? "turned toward unsupported space and stopped" : "turned on the support and stopped" });
     if (!o.grounded && !this.airborne) {
       this.airborne = o.velocity[1] > 1 ? "jumping" : "falling";
       this.takeoffSupport = this.lastSupportIdentity;
@@ -183,7 +210,7 @@ export class PhysicalHistory {
     }
     if (!this.last || JSON.stringify(now) !== JSON.stringify(this.last)) this.push(now);
     this.last = now;
-    this.lastGaze = o.gaze;
+    if (!this.lastGaze || turned || now.motion !== "standing" || now.support !== "living matter") this.lastGaze = o.gaze;
     this.lastSupportIdentity = supportIdentity(o, scene);
   }
   private push(event: PhysicalEvent) { this.events.push(event); if (this.events.length > 7) this.events.shift(); this.revision++; }

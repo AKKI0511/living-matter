@@ -16,6 +16,23 @@ test("scenario source selects a validated candidate; empty contexts permit no in
   assert.deepEqual(await gate.request(context), candidate);
   assert.equal(await gate.request({ observations: [], candidates: [] }), null);
 });
+
+test("preview considers a branch at a matter rim even when the old deck continues ahead", async () => {
+  const branch = { ...candidate, id: "branch", kind: "weave" as const,
+    physical: { from: [0, 0, -25] as [number, number, number], to: [0, 0, -31] as [number, number, number],
+      distance: 1, span: 6, rise: 0, medium: "air" as const } };
+  const observation = { time: 1, position: [0, 0.885, -26] as [number, number, number],
+    velocity: [0, 0, -2] as [number, number, number], gaze: [0, 0, -1] as [number, number, number],
+    grounded: true, activeStructure: null };
+  const player = { support: "living matter", motion: "walking forward", facing_into: "living matter", position_on_support: "at an edge" };
+  const base = { observations: [observation], candidates: [branch], generation: 0,
+    semantic: { player_now: player, recent_behavior_oldest_to_newest: [player],
+      matter_now: { state: "active" as const, player_supported_by_matter: true } } };
+  const source = new ScenarioDecisions(), signal = new AbortController().signal;
+  assert.equal((await source.select(base, signal)).candidateId, branch.id);
+  assert.equal((await source.select({ ...base, semantic: { ...base.semantic,
+    player_now: { ...player, position_on_support: "inside the support" } } }, signal)).hold, true);
+});
 test("a reset invalidates an in-flight response", async () => {
   let resolve!: (value: Intervention) => void;
   const gate = new DecisionGate({

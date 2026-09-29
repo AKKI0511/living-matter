@@ -6,6 +6,7 @@ import {
   formationPose,
   platformOffset,
   MATTER_COUNT,
+  boxCoordinates,
 } from "../src/game/world";
 test("every solid formation reaches both shores with traversable step heights", () => {
   for (const site of sites)
@@ -34,9 +35,9 @@ test("each finite matter unit lands inside its matching collision surface", () =
         assert.ok(p.scale.every((n) => n > 0));
         assert.ok(
           boxes.some((b) =>
-            p.position.every(
+            boxCoordinates(p.position, b).every(
               (n, axis) =>
-                Math.abs(n - b.position[axis]) <= b.size[axis] / 2 + 0.001,
+                Math.abs(n) <= b.size[axis] / 2 + 0.001,
             ),
           ),
           `${site.id}/${kind}/${i}`,

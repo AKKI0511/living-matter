@@ -20,6 +20,44 @@ const observation = (
   activeStructure: null,
 });
 
+test("offset shoreline approaches have adjacent support in both travel directions", () => {
+  for (const site of sites) for (const from of [site.start, site.end]) {
+    for (const offset of [-8, -6.4, -4, 0, 4, 6.4, 8]) {
+      const p: Vec3 = [from[0] + offset, from[1] + 0.825, from[2]];
+      const candidates = availableCandidates(p).filter(c => c.siteId === site.id && c.route);
+      assert.ok(candidates.some(c => c.physical!.distance <= 2.15), `${site.id} ${JSON.stringify(p)}`);
+      assert.ok(availableCandidates(p).length <= 16);
+      assert.ok(candidates.every(c => c.route![0].every((v, i) => v === c.physical!.from[i])));
+    }
+  }
+});
+
+test("shore ports remain the same physical action during a short walk", () => {
+  const before = availableCandidates([-6.4, 0.825, -23.8]);
+  const after = availableCandidates([-6.2, 0.825, -24.4]);
+  for (const candidate of before.filter(c => c.physical!.from[0] === -8)) {
+    const current = after.find(c => c.id === candidate.id);
+    assert.ok(current);
+    assert.deepEqual(current.route, candidate.route);
+    assert.deepEqual(current.physical!.from, candidate.physical!.from);
+  }
+});
+
+test("preview does not form an off-centre dock while walking normally across an island", async () => {
+  const source = new ScenarioDecisions();
+  const current = observation([-9.6, 0.825, -57], [-0.5, 0, -0.9], [-2, 0, -4]);
+  const result = await source.select({
+    generation: 0, observations: [current], candidates: availableCandidates(current.position),
+    semantic: {
+      player_now: { support: "permanent ground", motion: "walking forward", facing_into: "walkable ground" },
+      recent_behavior_oldest_to_newest: [{ support: "permanent ground", motion: "walking forward" }],
+      matter_now: { state: "idle", player_supported_by_matter: false },
+    },
+  }, new AbortController().signal);
+  assert.equal(result.candidateId, null);
+  assert.equal(result.hold, true);
+});
+
 test("selection depends on physical geometry and behavior, not stage identity or order", async () => {
   const source = new ScenarioDecisions(),
     signal = new AbortController().signal;
@@ -28,10 +66,10 @@ test("selection depends on physical geometry and behavior, not stage identity or
     id: `unknown-${i}`,
     preferred: "bridge" as const,
   }));
-  const candidates = availableCandidates([0, 6.825, -104], scene).reverse();
+  const candidates = availableCandidates([14, 6.825, -104], scene).reverse();
   const result = await source.select(
     {
-      observations: [observation([0, 6.825, -104], [0, 0, -1])],
+      observations: [observation([14, 6.825, -104], [-0.76, 0, -0.65])],
       candidates,
       generation: 0,
     },
@@ -41,10 +79,10 @@ test("selection depends on physical geometry and behavior, not stage identity or
     candidates.find((c) => c.id === result.candidateId)?.kind,
     "weave",
   );
-  const reverse = availableCandidates([0, 0.825, -52], scene);
+  const reverse = availableCandidates([-14, 0.825, -52], scene);
   const returning = await source.select(
     {
-      observations: [observation([0, 0.825, -52], [0, 0, 1], [0, 0, 2])],
+      observations: [observation([-14, 0.825, -52], [0.57, 0, 0.82], [1, 0, 2])],
       candidates: reverse,
       generation: 0,
     },
@@ -59,12 +97,12 @@ test("selection depends on physical geometry and behavior, not stage identity or
 test("looking away produces no intervention, while repeated jumps can change assistance", async () => {
   const source = new ScenarioDecisions(),
     signal = new AbortController().signal;
-  const candidates = availableCandidates([0, 0.825, -62]);
+  const candidates = availableCandidates([-14, 0.825, -62]);
   assert.equal(
     (
       await source.select(
         {
-          observations: [observation([0, 0.825, -62], [1, 0, 0])],
+          observations: [observation([-14, 0.825, -62], [-1, 0, 0])],
           candidates,
           generation: 0,
         },
@@ -75,7 +113,7 @@ test("looking away produces no intervention, while repeated jumps can change ass
   );
   const walking = await source.select(
     {
-      observations: [observation([0, 0.825, -62], [0, 0.4, -0.9])],
+      observations: [observation([-14, 0.825, -62], [0.8, 0.4, -0.45])],
       candidates,
       generation: 0,
     },
@@ -83,7 +121,7 @@ test("looking away produces no intervention, while repeated jumps can change ass
   );
   const jumping = await source.select(
     {
-      observations: [observation([0, 1.2, -62], [0, 0.4, -0.9], [0, 4, -1])],
+      observations: [observation([-14, 1.2, -62], [0.8, 0.4, -0.45], [0, 4, -1])],
       candidates,
       generation: 0,
     },

@@ -20,6 +20,9 @@ import {
   PLAYER_RADIUS,
   sites,
   SPAWN,
+  WORLD_LIMITS,
+  WATER_LEVEL,
+  structureBoxes,
 } from "./world";
 import { physicalScene, type Runtime } from "./runtime";
 import { guardWeaveEdge } from "./weave";
@@ -56,8 +59,8 @@ export function Player({ runtime }: { runtime: Runtime }) {
   const finale = useRef({
     started: false,
     look: new Vector3(),
-    position: new Vector3(10, 17, -174),
-    target: new Vector3(0, 21, -207),
+    position: new Vector3(20, 17, -174),
+    target: new Vector3(10, 21, -207),
   });
   useEffect(() => {
     const kcc = world.createCharacterController(0.025);
@@ -124,9 +127,10 @@ export function Player({ runtime }: { runtime: Runtime }) {
       if (s.phase !== "active" || s.kind !== "platform" || m.y > 1) return;
       const site = sites[i],
         deck = site.start[1] + 0.18 + s.previousOffset[1];
+      const dock = structureBoxes(site, "platform")[0].position;
       if (
-        Math.abs(pos.x - site.start[0]) < 2.65 &&
-        Math.abs(pos.z - (site.start[2] - 2.55 + s.previousOffset[2])) < 2.65 &&
+        Math.abs(pos.x - dock[0] - s.previousOffset[0]) < 2.65 &&
+        Math.abs(pos.z - dock[2] - s.previousOffset[2]) < 2.65 &&
         Math.abs(pos.y - 0.825 - deck) < 0.3
       ) {
         supportedDeck = site.start[1] + 0.18 + s.offset[1];
@@ -195,9 +199,10 @@ export function Player({ runtime }: { runtime: Runtime }) {
     if (supportedDeck !== null && m.y <= 0) {
       const s = runtime.states[runtime.activeSite!],
         site = sites[runtime.activeSite!];
+      const dock = structureBoxes(site, "platform")[0].position;
       if (
-        Math.abs(pos.x + delta.x - site.start[0]) < 2.65 &&
-        Math.abs(pos.z + delta.z - (site.start[2] - 2.55 + s.offset[2])) < 2.65
+        Math.abs(pos.x + delta.x - dock[0] - s.offset[0]) < 2.65 &&
+        Math.abs(pos.z + delta.z - dock[2] - s.offset[2]) < 2.65
       ) {
         delta.y = supportedDeck + 0.825 - pos.y;
         grounded = true;
@@ -239,9 +244,8 @@ export function Player({ runtime }: { runtime: Runtime }) {
         }
       }
     }
-    const waterHeight =
-      next.z < -154 && next.z > -184 && Math.abs(next.x) < 23 ? 5.15 : -3;
-    if (next.y < waterHeight + 0.1 || Math.abs(next.x) > 160) {
+    const waterHeight = WATER_LEVEL;
+    if (next.y < waterHeight + 0.1 || next.x < WORLD_LIMITS.minX || next.x > WORLD_LIMITS.maxX || next.z < WORLD_LIMITS.minZ || next.z > WORLD_LIMITS.maxZ) {
       runtime.recoveries++;
       runtime.forcedPosition = [...runtime.checkpoint];
       sound.tone(140, 0.7, 0.1);
@@ -249,7 +253,7 @@ export function Player({ runtime }: { runtime: Runtime }) {
         duration: 650,
       });
     }
-    if (next.z < DESTINATION[2] && Math.abs(next.x) < 5 && next.y > 6) {
+    if (Math.hypot(next.x - DESTINATION[0], next.z - DESTINATION[2]) < 4 && grounded && next.y > 6) {
       useGame.getState().setPhase("complete");
       sound.arrive();
       document.exitPointerLock?.();

@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
-import { beginJevCall, completeJevCall, recordJevGameOutcome, startJevSession } from "../src/server/jev-audit";
+import { beginJevCall, completeJevCall, recordJevGameOutcome, startJevSession, recordJevSessionEvent } from "../src/server/jev-audit";
 
 test("a live run keeps exact calls, outcomes, latency, tokens and a priced summary", async (t) => {
   const auditRoot = await mkdtemp(join(tmpdir(), "living-matter-audit-test-"));
@@ -42,4 +42,13 @@ test("a live run keeps exact calls, outcomes, latency, tokens and a priced summa
   assert.equal(summary.cost.estimated_total_usd, null);
   assert.equal(summary.cost.known_estimated_usd, 0.000058926);
   assert.equal(summary.cost.unknown_cost_calls, 1);
+  await recordJevSessionEvent(sessionId, { event: "started", simulationTime: 0, recoveries: 0 });
+  await recordJevSessionEvent(sessionId, { event: "paused", simulationTime: 20, recoveries: 1 });
+  await recordJevSessionEvent(sessionId, { event: "resumed", simulationTime: 20, recoveries: 1 });
+  await recordJevSessionEvent(sessionId, { event: "completed", simulationTime: 263.5, recoveries: 1 });
+  summary = JSON.parse(await readFile(summaryPath, "utf8"));
+  assert.equal(summary.simulation_seconds, 263.5);
+  assert.equal(summary.recoveries, 1);
+  assert.ok(summary.completed_at);
+  assert.ok(summary.playing_wall_seconds >= 0);
 });

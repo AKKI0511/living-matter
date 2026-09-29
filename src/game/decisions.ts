@@ -14,6 +14,10 @@ export type Candidate = {
   siteId: string;
   kind: FormationKind;
   route?: Vec3[];
+  weaveSegment?: number;
+  attachment?: "near end" | "far end" | "middle";
+  turnDegrees?: number;
+  crossSlope?: number;
   physical?: {
     from: Vec3;
     to: Vec3;
@@ -21,6 +25,7 @@ export type Candidate = {
     span: number;
     rise: number;
     medium: "air" | "water";
+    landing?: boolean;
   };
 };
 export type DecisionContext = {
@@ -53,11 +58,19 @@ export interface DecisionSource {
 /** Disposable behavior policy. No stage names, ordering, progression or geometry construction. */
 export class ScenarioDecisions implements DecisionSource {
   async select(
-    { candidates, observations }: DecisionContext,
+    { candidates, observations, semantic }: DecisionContext,
     signal: AbortSignal,
   ): Promise<Intervention> {
     if (signal.aborted) return { candidateId: null };
     const latest = observations.at(-1);
+      if (semantic?.player_now.support === "permanent ground" &&
+        ["walkable ground", "living matter"].includes(semantic.player_now.facing_into ?? "") &&
+      !semantic.player_now.motion.includes("behind"))
+      return { candidateId: null, hold: true };
+    if (semantic?.matter_now.player_supported_by_matter &&
+      semantic.player_now.position_on_support !== "at an edge" &&
+      ["living matter", "walkable ground"].includes(semantic.player_now.facing_into ?? ""))
+      return { candidateId: null, hold: true };
     if (!latest || !candidates.some((c) => c.physical))
       return { candidateId: candidates[0]?.id ?? null };
     let best: Candidate | null = null,
@@ -75,12 +88,17 @@ export class ScenarioDecisions implements DecisionSource {
       // Looking away and retreating can mean no help. Waiting and looking across can mean help.
       if (gaze < 0.4 && travel < 0.3) continue;
       const jumping = observations.slice(-10).some((o) => o.velocity[1] > 2);
-      const preferred = jumping && Math.abs(p.rise) > 1 ? "platform" : "weave";
-      const rank =
+        const preferred = jumping && Math.abs(p.rise) > 1 ? "platform" : "weave";
+        const surface = semantic?.player_now.surface_beyond_facing ?? "";
+        const desiredRise = surface.endsWith("higher") || latest.gaze[1] > 0.15 ? 1.5 :
+          surface.endsWith("lower") || latest.gaze[1] < -0.15 ? -1.5 : 0;
+        const rank =
         gaze * 4 +
         Math.max(-2, travel) -
         p.distance * 0.12 +
-        (candidate.kind === preferred ? 3 : 0);
+          (candidate.kind === preferred ? 3 : 0) -
+          (candidate.weaveSegment !== undefined ? Math.abs(p.rise - desiredRise) * 0.4 : 0) +
+          (p.landing ? 1.2 : 0);
       if (rank > score || (rank === score && candidate.id < (best?.id ?? ""))) {
         best = candidate;
         score = rank;

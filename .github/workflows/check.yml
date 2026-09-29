@@ -1,5 +1,8 @@
 name: Check
-on: [push, pull_request]
+on:
+  push:
+    branches: [main]
+  pull_request:
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -30,6 +33,11 @@ jobs:
         timeout-minutes: 4
       - run: pnpm test:e2e
         timeout-minutes: 20
+      - name: Check mocked live transport
+        run: pnpm exec playwright test live-transport.spec.ts
+        env:
+          NEXT_PUBLIC_DECISION_BACKEND: jev
+        timeout-minutes: 8
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
