@@ -8,8 +8,8 @@ const snap = (page: Page) => page.evaluate(() => window.__livingMatter!.snapshot
 });
 
 async function begin(page: Page) {
-  await page.goto("/");
-  await page.getByRole("button", { name: /Enter the world/ }).click();
+  await page.goto("/play");
+  await page.getByRole("button", { name: /^Play$/ }).click();
 }
 
 async function simulateFor(page: Page, seconds: number) {
@@ -65,18 +65,17 @@ test("free movement relative to a travelling platform, including reversing and j
   expect((await snap(page)).recoveries).toBe(0);
 });
 
-test("night reveals a constellation of the actual route and controls stay legible", async ({ page }, info) => {
+test("night sky and controls stay legible", async ({ page }, info) => {
   await begin(page);
   await go(page, [0, 0, -12]);
   await page.keyboard.press("Escape");
   await page.getByRole("button", { name: "Switch to night" }).click();
   await expect(page.getByRole("button", { name: "Switch to day" })).toBeVisible();
-  await page.getByRole("button", { name: /Continue/ }).click();
+  await page.getByRole("button", { name: /^Resume$/ }).click();
   await page.evaluate(() => window.__livingMatter!.look(0.15, 0.55));
   await page.waitForTimeout(1800);
-  expect((await snap(page)).constellation).toBeGreaterThan(5);
   await page.screenshot({ path: info.outputPath("memory-sky.png") });
-  expect(await page.locator(".hint").evaluate(e => parseFloat(getComputedStyle(e).fontSize))).toBeGreaterThanOrEqual(15);
+  expect(await page.locator(".pause").evaluate(e => parseFloat(getComputedStyle(e).fontSize))).toBeGreaterThanOrEqual(15);
   await page.keyboard.press("t");
   await expect(page.getByRole("button", { name: "Switch to night" })).toBeVisible();
 });

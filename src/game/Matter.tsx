@@ -105,9 +105,9 @@ export function Matter({ runtime }: { runtime: Runtime }) {
       mesh.current!.setColorAt(
         i,
         color.setHSL(
-          0.092 + Math.sin(i * 23.7) * 0.012,
-          0.28,
-          0.48 + (i % 7) * 0.028,
+          0.105 + Math.sin(i * 23.7) * 0.004,
+          0.24,
+          0.62 + (i % 7) * 0.008,
         ),
       );
       live.set(
@@ -245,10 +245,14 @@ export function Matter({ runtime }: { runtime: Runtime }) {
         );
         bankVersions.current[bankIndex] = bank.version;
       }
-      const t =
+      const progress =
         bank && bank.version > 0
           ? weaveBlend(runtime.time, bank.since)
           : smooth((elapsed - ((i % 32) / 32) * 0.35) / (duration - 0.4));
+      // Leave a visible assembly gap until the corresponding physics step has
+      // enabled support. Occupied, unchanged banks always retain their full pose.
+      const waitingForSupport = state && (state.phase !== "active" || (bank && runtime.time - bank.since < WEAVE_SECONDS));
+      const t = waitingForSupport ? Math.min(0.965, progress) : progress;
       const pose = bank
         ? bankPoses.current[bankIndex]!.poses[i % 256]
         : state
@@ -525,6 +529,7 @@ export function Matter({ runtime }: { runtime: Runtime }) {
   return (
     <>
       <instancedMesh
+        name="living-matter"
         ref={mesh}
         args={[geometry, undefined, MATTER_COUNT]}
         castShadow
@@ -532,11 +537,11 @@ export function Matter({ runtime }: { runtime: Runtime }) {
         frustumCulled={false}
       >
         <meshStandardMaterial
-          color="#d4b980"
-          metalness={0.58}
-          roughness={0.3}
-          emissive="#ba8640"
-          emissiveIntensity={0.08}
+          color="#f0ddad"
+          metalness={0.48}
+          roughness={0.36}
+          emissive="#b29b68"
+          emissiveIntensity={0.025}
         />
       </instancedMesh>
       <RigidBody ref={body} type="kinematicPosition" colliders={false}>

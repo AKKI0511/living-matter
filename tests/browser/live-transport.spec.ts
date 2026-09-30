@@ -5,6 +5,33 @@ import { sites } from "../../src/game/world";
 
 test.skip(process.env.NEXT_PUBLIC_DECISION_BACKEND === "preview", "Requires the live-mode browser bundle; transport is mocked.");
 
+test("pausing, restarting and exiting abort late live responses", async ({ page }) => {
+  const pending: { finish: () => void }[] = [];
+  await page.route("**/api/decision", async route => {
+    const context=route.request().postDataJSON();
+    await new Promise<void>(resolve => pending.push({finish:resolve}));
+    await route.fulfill({json:{candidateId:context.candidates[0].id}}).catch(() => {});
+  });
+  await page.goto("/play"); await page.getByRole("button",{name:"Play",exact:true}).click();
+  await page.evaluate(()=>{window.__livingMatter!.teleport([0,.825,-23]);window.__livingMatter!.look(.6,0);});
+  await expect.poll(()=>pending.length).toBe(1);
+  await page.keyboard.press("Escape");
+  await page.getByRole("button",{name:"Restart",exact:true}).click();
+  pending[0].finish();
+  await expect.poll(()=>page.evaluate(()=>(window.__livingMatter!.snapshot() as {states:{phase:string}[]}).states.every(s=>s.phase==="idle"))).toBe(true);
+  await page.evaluate(()=>{window.__livingMatter!.teleport([0,.825,-23]);window.__livingMatter!.look(.6,0);});
+  await expect.poll(()=>pending.length).toBe(2);
+  await page.keyboard.press("Escape");await page.getByRole("link",{name:"Back to home",exact:true}).click();
+  pending[1].finish();await page.waitForTimeout(500);
+  expect(await page.evaluate(()=>window.__livingMatter)).toBeUndefined();
+  await expect(page.locator("canvas")).toHaveCount(0);
+  await page.getByRole("link",{name:"Play",exact:true}).click();
+  await page.getByRole("button",{name:"Play",exact:true}).click();
+  await page.waitForTimeout(500);
+  expect(pending.length).toBe(2);
+  expect(await page.evaluate(()=>(window.__livingMatter!.snapshot() as {states:{phase:string}[]}).states.every(s=>s.phase==="idle"))).toBe(true);
+});
+
 async function mockDecisions(page: Page) {
   const source = new ScenarioDecisions();
   const counts = { waterOffers: 0 };
@@ -28,9 +55,9 @@ test("delayed mocked live decisions form a water route after recovery", async ({
   const warnings: string[] = [];
   page.on("pageerror", (e) => warnings.push(e.message));
   page.on("console", (m) => { if (m.type() === "warning" || m.type() === "error") warnings.push(m.text()); });
-  await page.goto("/");
-  await expect(page.getByText(/Live intelligence/)).toBeVisible();
-  await page.getByRole("button", { name: /Enter the world/ }).click();
+  await page.goto("/play");
+  await expect(page.getByText(/Live Jev/)).toBeVisible();
+  await page.getByRole("button", { name: /^Play$/ }).click();
   const snapshot = () => page.evaluate(() => window.__livingMatter!.snapshot() as { player: number[]; grounded: boolean; recoveries: number; phase: string; states: { phase: string }[] });
   await expect.poll(async () => (await snapshot()).grounded).toBe(true);
   await page.evaluate(() => window.__livingMatter!.teleport([15, -5, 1]));
@@ -70,8 +97,8 @@ test("delayed mocked live decisions form a water route after recovery", async ({
 
 test("looking across occupied matter builds a side branch and permits returning", async ({ page }) => {
   await mockDecisions(page);
-  await page.goto("/");
-  await page.getByRole("button", { name: /Enter the world/ }).click();
+  await page.goto("/play");
+  await page.getByRole("button", { name: /^Play$/ }).click();
   await page.evaluate(() => { window.__livingMatter!.teleport([0, 1, -23]); window.__livingMatter!.formation(0, "weave", 0); });
   await expect.poll(async () => (await physicalSnapshot(page)).states[0].phase).toBe("active");
   const original = (await physicalSnapshot(page)).weave!.banks[0];
@@ -96,8 +123,8 @@ test("the live source is consulted at a matter side rim while the old deck still
     calls++;
     await route.fulfill({ json: { candidateId: null, hold: true } });
   });
-  await page.goto("/");
-  await page.getByRole("button", { name: /Enter the world/ }).click();
+  await page.goto("/play");
+  await page.getByRole("button", { name: /^Play$/ }).click();
   await page.evaluate(() => window.__livingMatter!.formation(2, "weave", 0));
   await expect.poll(async () => (await physicalSnapshot(page)).states[2].phase).toBe("active");
   const bank = (await physicalSnapshot(page)).weave!.banks[0];
@@ -117,8 +144,8 @@ test("the live source is consulted at a matter side rim while the old deck still
 
 test("a reversal rebuilds the missing half behind without moving occupied support", async ({ page }) => {
   await mockDecisions(page);
-  await page.goto("/");
-  await page.getByRole("button", { name: /Enter the world/ }).click();
+  await page.goto("/play");
+  await page.getByRole("button", { name: /^Play$/ }).click();
   await page.evaluate(() => { window.__livingMatter!.teleport([0, 1, -23]); window.__livingMatter!.formation(0, "weave"); });
   await expect.poll(async () => (await physicalSnapshot(page)).states[0].phase).toBe("active");
   const occupied = (await physicalSnapshot(page)).weave!.banks[1];

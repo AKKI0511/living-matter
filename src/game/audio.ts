@@ -15,6 +15,14 @@ class Soundscape {
     }
     this.voices.clear();
   }
+  stop() {
+    this.reset();
+    const context = this.context;
+    this.context = null;
+    this.master = null;
+    this.ambience = null;
+    void context?.close().catch(() => {});
+  }
   async start() {
     if (!this.context) {
       const ctx = new AudioContext();
@@ -66,10 +74,11 @@ class Soundscape {
   pause(value: boolean) {
     if (this.context && this.ambience)
       this.ambience.gain.setTargetAtTime(
-        value ? 0.025 : 0.13,
+        value ? 0 : 0.13,
         this.context.currentTime,
         0.6,
       );
+    if (value) this.reset();
   }
   tone(
     frequency: number,

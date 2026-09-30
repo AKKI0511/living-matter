@@ -11,5 +11,10 @@ playwright-report/
 *.tsbuildinfo
 .DS_Store
 artifacts/
+.vercel/
+.vercelignore.local
 jev-sessions/
 skills-lock.json
+
+.vercel
+.env*

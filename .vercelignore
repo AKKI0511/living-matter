@@ -1,0 +1,9 @@
+internal
+jev-sessions
+artifacts
+test-results
+playwright-report
+.env*
+.git
+.vercel
+.agents

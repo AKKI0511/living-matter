@@ -1,64 +1,37 @@
-<p align="center">
-  <img src="docs/assets/living-matter.svg" alt="Living Matter. Follow the light. The way will find you." width="100%" />
-</p>
+# Living Matter
 
-<p align="center">A quiet 3D browser world. One living body. A path that moves with you.</p>
+Explore a world with a companion that builds paths as you move.
 
-<p align="center">
-  <a href="#play">Play locally</a> · <a href="docs/README.md">Explore the docs</a> · <a href="docs/jev.md">Meet Jev</a> · <a href="LICENSE">MIT</a>
-</p>
+![Living matter in the flooded observatory](public/images/living-matter.webp)
 
-Walk toward the light. Watch 512 pieces of matter gather into steps, bridges, and moving platforms. Turn around. Change your mind. See what follows.
+Walk across limestone terraces, turn toward open water, climb or head back. One body of 512 pieces builds and recycles paths while keeping occupied support in place. Reach the circular monument, or take your time exploring.
 
-Leave from any clear shore edge. While standing on matter, turn toward open space to build your own route, climb, or circle back. The surrounding sea has a shared travel boundary.
+## Play locally
 
-Switch to night for a living black hole and a constellation drawn from your journey. Headphones recommended.
-
-## Play
-
-Use Node.js 24 and pnpm 12. No API key needed for preview mode.
+Use Node 24 and pnpm.
 
 ```sh
-git clone https://github.com/AKKI0511/living-matter.git
-cd living-matter
 pnpm install
 pnpm dev
 ```
 
-Open [localhost:3000](http://localhost:3000) and enter the world.
+Open [localhost:3000](http://localhost:3000) and select Play.
 
-| Move | Look | Jump | Run | Pause | Day / night |
-| :---: | :---: | :---: | :---: | :---: | :---: |
-| WASD / arrows | Mouse / drag | Space | Shift | Esc | T |
+WASD / arrows move. Mouse / drag looks. Space jumps. Shift runs. Escape pauses. T switches Day / Night. Touch uses a left movement stick, right look area and Jump button.
 
-On touch screens, use your left thumb to move, your right thumb to look, and the jump button.
+The menu offers Resume, Restart, Back to home, Sound and Auto / Low / High graphics. Interface mode defaults to Dark; Light is available. Preferences are saved locally.
 
-## Play with Jev
+## Decision modes
 
-Preview uses deterministic decisions. Live mode uses [Jev](https://docs.typesafe.ai/concepts/system-one), TypeSafe's System One model, to interpret your movement.
+The default is deterministic preview, requiring no key. For live Jev, copy [`.env.example`](.env.example) to `.env.local`, set `NEXT_PUBLIC_DECISION_BACKEND=jev` and a server-only `TYPESAFE_API_KEY`, then restart. Live decisions hold existing support on provider failure and never silently switch to preview.
 
-Create `.env.local` with:
-
-```dotenv
-NEXT_PUBLIC_DECISION_BACKEND=jev
-TYPESAFE_API_KEY=your_api_key
-TYPESAFE_DEFAULT_MODEL=jev-1.13.0
-NEXT_PUBLIC_JEV_SESSION_AUDIT=0
-```
-
-Restart the dev server. Set the backend to `preview` to switch back. Live mode is experimental; [here is how it works, with example inputs and answers](docs/jev.md). To record a play session during development, set `NEXT_PUBLIC_JEV_SESSION_AUDIT=1` and restart. Auditing defaults to off and is disabled in production. Find a run with `pnpm jev:sessions --latest`, then [replay its decisions and curate eval data](docs/jev-session-audits.md). Local runs stay gitignored.
-
-In one completed, audited live play (2.43 minutes), Jev made 55 calls using 136,526 input tokens and 10,034 free output tokens. At the [Jev 1.13 rate](https://docs.typesafe.ai/models) of $0.042 per million input tokens, that was about **$0.0057 per play**, or **$0.0024 per minute**. This is a measured prototype run before the latest input reduction, not a fixed price for every player.
-
-## Run a production build
+[Jev integration](docs/jev.md) · [Player–matter contract](docs/contract.md) · [Development](docs/development.md) · [Production configuration](docs/deployment.md) · [Roadmap](docs/roadmap.md)
 
 ```sh
+pnpm typecheck
+pnpm test
 pnpm build
 pnpm start
 ```
 
-Use a Node.js host with WebGL 2 in the browser. Set environment variables before building; keep the API key on the server.
-
----
-
-[The experience](docs/experience.md) · [Architecture](docs/architecture.md) · [Development](docs/development.md)
+Project code and generated game art are [MIT licensed](LICENSE). Font licenses are in [public/licenses](public/licenses); renderer compatibility patches remain in [patches](patches).

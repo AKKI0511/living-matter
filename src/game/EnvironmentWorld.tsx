@@ -1,432 +1,211 @@
 "use client";
 import { useEffect, useMemo, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
-import {
-  Environment,
-  Lightformer,
-  MeshReflectorMaterial,
-} from "@react-three/drei";
+import { Environment, Lightformer } from "@react-three/drei";
 import { CuboidCollider, RigidBody } from "@react-three/rapier";
-import {
-  BackSide,
-  Color,
-  ShaderMaterial,
-  DirectionalLight,
-  Object3D,
-  type MeshStandardMaterial,
-} from "three";
+import { BackSide, BufferAttribute, BufferGeometry, Color, DirectionalLight, InstancedMesh, MeshStandardMaterial, Object3D, ShaderMaterial } from "three";
 import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
-import { islands, WATER_LEVEL, architectureBoxes, columns, distantFragments } from "./world";
+import { walkableGround, islands, WATER_LEVEL, architectureBoxes, columns, distantFragments, MONUMENT, type StructureBox, type Vec3 } from "./world";
 import { useGame } from "./store";
-import { NightStars } from "./Constellation";
-import { BlackHole } from "./BlackHole";
+import { QUALITY } from "./quality";
+import { Moon, NightStars } from "./SkyFeatures";
 
-const stoneShader = (
-  shader: Parameters<NonNullable<MeshStandardMaterial["onBeforeCompile"]>>[0],
-) => {
-  shader.vertexShader =
-    "varying vec3 vStonePosition;\n" +
-    shader.vertexShader.replace(
-      "#include <worldpos_vertex>",
-      "#include <worldpos_vertex>\nvStonePosition = (modelMatrix * vec4(transformed, 1.0)).xyz;",
-    );
-  shader.fragmentShader =
-    "varying vec3 vStonePosition;\n" +
-    shader.fragmentShader.replace(
-      "#include <color_fragment>",
-      `#include <color_fragment>
-    float grain = fract(sin(dot(floor(vStonePosition * 90.0), vec3(12.9898,78.233,42.21))) * 43758.5453);
-    float strata = sin(vStonePosition.y * 0.9 + sin(vStonePosition.x * 0.12) * 2.0) * 0.008;
-    diffuseColor.rgb *= 0.985 + grain * 0.025 + strata;
-  `,
-    );
+const stoneShader: MeshStandardMaterial["onBeforeCompile"] = shader => {
+  shader.vertexShader = "varying vec3 vStonePosition;\n" + shader.vertexShader.replace("#include <worldpos_vertex>", "#include <worldpos_vertex>\nvStonePosition=(modelMatrix*vec4(transformed,1.)).xyz;");
+  shader.fragmentShader = "varying vec3 vStonePosition;\n" + shader.fragmentShader.replace("#include <color_fragment>", `#include <color_fragment>
+    float strata=sin(vStonePosition.y*2.8+sin(vStonePosition.x*.2)*.6)*.018;
+    float pores=sin(vStonePosition.x*26.)*sin(vStonePosition.z*24.)*.009;
+    diffuseColor.rgb*=.985+strata+pores;`);
 };
 
-function Stone({ dark = false }: { dark?: boolean }) {
-  return (
-    <meshStandardMaterial
-      color={dark ? "#586f75" : "#d5cbb5"}
-      roughness={0.84}
-      metalness={0.03}
-      onBeforeCompile={stoneShader}
-    />
-  );
+/** A bevelled rectangular cap above irregular, tapered masonry foundations. */
+function foundationGeometry() {
+  const g = new BufferGeometry(), vertices: number[] = [];
+  const outline = [[-.5,-.46],[-.46,-.5],[.46,-.5],[.5,-.46],[.5,.46],[.46,.5],[-.46,.5],[-.5,.46]];
+  const levels = [[0,1],[-.25,.94],[-.32,1],[-.73,.86],[-.8,.89],[-1,.7]];
+  for (let tier=0;tier<levels.length-1;tier++) for(let i=0;i<8;i++) {
+    const next=(i+1)%8;
+    const p=(level:number,corner:number) => [outline[corner][0]*levels[level][1],levels[level][0],outline[corner][1]*levels[level][1]];
+    vertices.push(...p(tier,i),...p(tier+1,i),...p(tier,next),...p(tier,next),...p(tier+1,i),...p(tier+1,next));
+  }
+  g.setAttribute("position", new BufferAttribute(new Float32Array(vertices),3)); g.computeVertexNormals(); return g;
 }
 
-function CutStone({ size }: { size: [number, number, number] }) {
-  const geometry = useMemo(
-    () => new RoundedBoxGeometry(...size, 2, 0.08),
-    [size[0], size[1], size[2]],
-  );
-  useEffect(() => () => geometry.dispose(), [geometry]);
-  return <primitive attach="geometry" object={geometry} />;
+function Boxes({ boxes, material, shadows = true }: { boxes: readonly StructureBox[]; material: MeshStandardMaterial; shadows?: boolean }) {
+  const mesh = useRef<InstancedMesh>(null);
+  useEffect(() => {
+    const transform=new Object3D();
+    boxes.forEach((box,i) => { transform.position.set(...box.position); transform.scale.set(...box.size); transform.rotation.set(...(box.rotation ?? [0,0,0])); transform.updateMatrix(); mesh.current!.setMatrixAt(i,transform.matrix); });
+    mesh.current!.instanceMatrix.needsUpdate=true; mesh.current!.computeBoundingSphere();
+  }, [boxes]);
+  return <instancedMesh ref={mesh} args={[undefined, material, boxes.length]} castShadow={shadows} receiveShadow><boxGeometry /></instancedMesh>;
 }
 
 function Sunlight() {
-  const light = useRef<DirectionalLight>(null);
-  const target = useMemo(() => new Object3D(), []);
-  const quality = useGame((s) => s.quality);
-  const night = useGame((s) => s.night);
+  const light = useRef<DirectionalLight>(null), target = useMemo(() => new Object3D(), []);
+  const quality = useGame(s => s.renderQuality), night = useGame(s => s.night);
   useFrame(({ camera }) => {
     if (!light.current) return;
-    light.current.position.set(
-      camera.position.x - 32,
-      42,
-      camera.position.z - 100,
-    );
-    target.position.set(camera.position.x, 0, camera.position.z - 22);
-    target.updateMatrixWorld();
+    // Snap the shadow projection to texels to prevent crawling as the player moves.
+    const texel=76/2048, x=Math.round(camera.position.x/texel)*texel, z=Math.round(camera.position.z/texel)*texel;
+    target.position.set(x,6,z-16); target.updateMatrixWorld();
+    light.current.position.set(x-32,68,z-76);
   });
-  return (
-    <>
-      <primitive object={target} />
-      <directionalLight
-        ref={light}
-        target={target}
-        intensity={night ? 0.85 : 3.6}
-        color={night ? "#9cbcff" : "#ffdeb1"}
-        castShadow
-        shadow-mapSize={[
-          quality === "high" ? 2048 : 1024,
-          quality === "high" ? 2048 : 1024,
-        ]}
-        shadow-camera-left={-38}
-        shadow-camera-right={38}
-        shadow-camera-top={44}
-        shadow-camera-bottom={-44}
-        shadow-camera-near={1}
-        shadow-camera-far={150}
-        shadow-normalBias={0.035}
-        shadow-bias={-0.00008}
-      />
-    </>
-  );
+  return <><primitive object={target} /><directionalLight ref={light} target={target} intensity={night ? 1.1 : 3.1} color={night ? "#a9c9eb" : "#fff0d3"} castShadow={quality === "high"} shadow-mapSize={[2048,2048]} shadow-camera-left={-38} shadow-camera-right={38} shadow-camera-top={38} shadow-camera-bottom={-38} shadow-camera-near={1} shadow-camera-far={160} shadow-normalBias={0.035} shadow-bias={-0.00008} /></>;
 }
 
 function Sky() {
-  const invalidate = useThree((s) => s.invalidate);
-  const material = useMemo(
-    () =>
-      new ShaderMaterial({
-        side: BackSide,
-        depthWrite: false,
-        uniforms: {
-          night: { value: 0 },
-          zenith: { value: new Color("#234a69") },
-          horizon: { value: new Color("#e4cba4") },
-        },
-        vertexShader:
-          "varying vec3 vDirection; void main(){ vDirection=position; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.); }",
-        fragmentShader: `varying vec3 vDirection; uniform vec3 zenith; uniform vec3 horizon; uniform float night;
-      void main(){ vec3 d=normalize(vDirection); float h=max(d.y,0.); vec3 c=mix(horizon,zenith,pow(h,.45));
-      vec3 sun=normalize(vec3(-.34,.19,-1.)); float glow=pow(max(dot(d,sun),0.),60.); c+=vec3(.3,.19,.075)*glow;
-      float disk=smoothstep(.99978,.99986,dot(d,sun)); c=mix(c,vec3(2.,1.65,1.12),disk); vec3 nocturne=mix(vec3(.023,.043,.085),vec3(.002,.006,.025),pow(h,.4));
-      nocturne+=vec3(.75,.85,1.)*disk;
+  const invalidate=useThree(s => s.invalidate);
+  const material=useMemo(() => new ShaderMaterial({ side:BackSide, depthWrite:false, uniforms:{night:{value:0}, zenith:{value:new Color("#5a929e")}, horizon:{value:new Color("#d5dbcf")}},
+    vertexShader:"varying vec3 vDirection; void main(){vDirection=position;vec4 p=projectionMatrix*mat4(mat3(viewMatrix))*vec4(position,1.);gl_Position=p.xyww;}",
+    fragmentShader:`varying vec3 vDirection;uniform vec3 zenith;uniform vec3 horizon;uniform float night;
+      void main(){vec3 d=normalize(vDirection);float h=max(d.y,0.);vec3 c=mix(horizon,zenith,pow(h,.5));
+      vec3 sun=normalize(vec3(-32.,62.,-60.));float glow=pow(max(dot(d,sun),0.),38.);c+=vec3(.23,.16,.07)*glow;
+      vec3 nocturne=mix(vec3(.06,.11,.16),vec3(.007,.016,.037),pow(h,.5));
       gl_FragColor=vec4(mix(c,nocturne,night),1.);
       #include <tonemapping_fragment>
       #include <colorspace_fragment>
-      }`,
-      }),
-    [],
-  );
-  useEffect(() => () => material.dispose(), [material]);
-  useFrame((_, dt) => {
-    const target = useGame.getState().night ? 1 : 0;
-    material.uniforms.night.value +=
-      (target - material.uniforms.night.value) *
-      (useGame.getState().reducedMotion
-        ? 1
-        : 1 - Math.exp(-Math.min(dt, 0.1) * 3));
-    if (Math.abs(target - material.uniforms.night.value) > 0.002) invalidate();
+      }` }), []);
+  useEffect(() => () => material.dispose(),[material]);
+  useFrame((_,dt) => {
+    const target=useGame.getState().night ? 1:0;
+    material.uniforms.night.value+=(target-material.uniforms.night.value)*(useGame.getState().reducedMotion?1:1-Math.exp(-Math.min(dt,.1)*3));
+    if(Math.abs(target-material.uniforms.night.value)>.002)invalidate();
   });
-  return (
-    <mesh material={material}>
-      <sphereGeometry args={[700, 32, 20]} />
-    </mesh>
-  );
+  return <mesh material={material} renderOrder={-10}><sphereGeometry args={[700,32,20]} /></mesh>;
 }
 
+/** Both presets use the same animated normals, Fresnel response and sky reflection. */
 function Water() {
-  const mat = useRef<ShaderMaterial>(null);
-  const uniforms = useMemo(
-    () => ({
-      time: { value: 0 },
-      night: { value: 0 },
-      tint: { value: new Color("#244e5c") },
-    }),
-    [],
-  );
-  useFrame((_, dt) => {
-    if (mat.current)
-      mat.current.uniforms.night.value = useGame.getState().night ? 1 : 0;
-    if (mat.current && useGame.getState().phase === "playing")
-      mat.current.uniforms.time.value += Math.min(dt, 0.05);
+  const material=useRef<ShaderMaterial>(null), quality=useGame(s=>s.renderQuality);
+  const uniforms=useMemo(() => ({time:{value:0},night:{value:0},detail:{value:QUALITY.low.waterDetail}}),[]);
+  useFrame((_,dt) => {
+    if(!material.current)return;
+    material.current.uniforms.night.value=useGame.getState().night?1:0;
+    if(useGame.getState().phase==="playing")material.current.uniforms.time.value+=Math.min(dt,.05);
+    material.current.uniforms.detail.value=QUALITY[quality].waterDetail;
   });
-  const quality = useGame((s) => s.quality);
-  const night = useGame((s) => s.night);
-  if (quality === "high")
-    return (
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, WATER_LEVEL, -120]}>
-        <planeGeometry args={[1400, 1400]} />
-        <MeshReflectorMaterial
-          resolution={512}
-          blur={[180, 50]}
-          mixBlur={0.8}
-          mixStrength={1.1}
-          roughness={0.32}
-          depthScale={0.35}
-          minDepthThreshold={0.3}
-          maxDepthThreshold={1.2}
-          color={night ? "#1b3449" : "#436b70"}
-          metalness={0.6}
-          mirror={0.65}
-        />
-      </mesh>
-    );
-  return (
-    <mesh
-      rotation={[-Math.PI / 2, 0, 0]}
-      position={[0, WATER_LEVEL, -120]}
-    >
-      <planeGeometry args={[1400, 1400, 1, 1]} />
-      <shaderMaterial
-        ref={mat}
-        uniforms={uniforms}
-        vertexShader={`varying vec3 vWorld; void main(){ vec4 world=modelMatrix*vec4(position,1.); vWorld=world.xyz; gl_Position=projectionMatrix*viewMatrix*world; }`}
-        fragmentShader={`
-      varying vec3 vWorld; uniform float time; uniform vec3 tint; uniform float night;
-      void main(){ vec2 p=vWorld.xz; float wave=sin(p.x*1.8+p.y*.6+time*.8)*.35+sin(p.y*2.7-p.x*.5-time*.65)*.2+sin(p.x*5.+p.y*4.+time)*.08;
-      vec3 view=normalize(cameraPosition-vWorld); float fresnel=pow(1.-max(view.y,0.),3.);
-      vec3 col=mix(tint,vec3(.55,.65,.64),fresnel*.8); col+=wave*.023;
-      float stripe=pow(max(0.,sin(p.y*3.+wave*3.+time*.2)),24.);
-      float sun=exp(-pow((p.x+32.)/13.,2.)); col+=vec3(.55,.4,.18)*stripe*sun*.35;
-      float fog=1.-exp(-length(cameraPosition-vWorld)*.003); col=mix(col,vec3(.55,.65,.65),fog);
-      col=mix(col,col*vec3(.12,.2,.34),night);
-      gl_FragColor=vec4(col,1.);
-      #include <tonemapping_fragment>
-      #include <colorspace_fragment>
-      }
-    `}
-      />
-    </mesh>
-  );
+  return <mesh rotation={[-Math.PI/2,0,0]} position={[0,WATER_LEVEL,-120]} receiveShadow>
+    <planeGeometry args={[1600,1600]} />
+    <shaderMaterial ref={material} uniforms={uniforms} vertexShader="varying vec3 vWorld;void main(){vec4 w=modelMatrix*vec4(position,1.);vWorld=w.xyz;gl_Position=projectionMatrix*viewMatrix*w;}"
+      fragmentShader={`varying vec3 vWorld;uniform float time;uniform float night;uniform float detail;
+      void main(){vec2 p=vWorld.xz;
+        float a=dot(p,vec2(.48,.32))+time*.48;float b=dot(p,vec2(-.27,.62))-time*.36;
+        float c=dot(p,vec2(2.1,1.5))+time*.65;
+        vec2 slope=cos(a)*vec2(.48,.32)*.028+cos(b)*vec2(-.27,.62)*.024+cos(c)*vec2(2.1,1.5)*.004*detail;
+        vec3 normal=normalize(vec3(-slope.x,1.,-slope.y));vec3 view=normalize(cameraPosition-vWorld);
+        vec3 reflected=reflect(-view,normal);float fresnel=.025+.72*pow(1.-max(dot(normal,view),0.),4.);
+        vec3 skyDay=mix(vec3(.17,.30,.29),vec3(.08,.20,.25),pow(max(reflected.y,0.),.5));
+        vec3 skyNight=mix(vec3(.065,.115,.16),vec3(.012,.028,.06),pow(max(reflected.y,0.),.5));
+        vec3 deep=mix(vec3(.018,.115,.125),vec3(.008,.034,.051),night);
+        vec3 col=mix(deep,mix(skyDay,skyNight,night),fresnel);
+        vec3 sun=normalize(vec3(-32.,62.,-60.));float light=pow(max(dot(reflected,sun),0.),140.);
+        col+=mix(vec3(1.1,.88,.54),vec3(.32,.48,.68),night)*light*.85;
+        float distance=length(cameraPosition-vWorld);float haze=1.-exp(-distance*.0018);
+        col=mix(col,mix(vec3(.45,.55,.53),vec3(.048,.084,.125),night),haze);
+        gl_FragColor=vec4(col,1.);
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
+      }`} />
+  </mesh>;
 }
 
-function Landmark() {
-  return (
-    <group position={[10, 6, -207]}>
-      <RigidBody type="fixed" colliders="trimesh">
-        <mesh position={[0, 16.5, -2]} castShadow receiveShadow>
-          <torusGeometry args={[15.5, 1.1, 16, 128]} />
-          <Stone />
-        </mesh>
-      </RigidBody>
-      <mesh position={[0, 16.5, -0.88]}>
-        <torusGeometry args={[15.5, 0.055, 6, 160]} />
-        <meshBasicMaterial color={[5, 3.3, 1.4]} />
-      </mesh>
-      <mesh position={[0, 16.5, -1.98]}>
-        <torusGeometry args={[14.38, 0.065, 6, 160]} />
-        <meshBasicMaterial color={[4, 2.8, 1.4]} />
-      </mesh>
-      <RigidBody type="fixed" colliders="cuboid">
-        <mesh position={[-13.5, 4, -1.5]} castShadow receiveShadow>
-          <CutStone size={[2, 8, 5]} />
-          <Stone />
-        </mesh>
-        <mesh position={[13.5, 4, -1.5]} castShadow receiveShadow>
-          <CutStone size={[2, 8, 5]} />
-          <Stone />
-        </mesh>
-      </RigidBody>
-      <mesh position={[0, 16.5, -2]}>
-        <circleGeometry args={[14.35, 96]} />
-        <shaderMaterial
-          transparent
-          depthWrite={false}
-          vertexShader="varying vec2 vUv; void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}"
-          fragmentShader="varying vec2 vUv; void main(){float edge=pow(length(vUv-.5)*2.,5.);gl_FragColor=vec4(1.,.8,.48,.035+edge*.12);}"
-        />
-      </mesh>
-      <pointLight
-        position={[0, 6, 2]}
-        intensity={100}
-        distance={23}
-        color="#ffe0a4"
-      />
-      {[0, 1, 2, 3].map((i) => (
-        <mesh
-          key={i}
-          position={[0, 0.012, 7 + i * 3.8]}
-          rotation={[-Math.PI / 2, 0, 0]}
-        >
-          <planeGeometry args={[8 - i * 0.6, 0.05]} />
-          <meshBasicMaterial color="#d6bd83" />
-        </mesh>
-      ))}
-    </group>
-  );
+function GroundDetail({ stone, brass }: { stone: MeshStandardMaterial; brass: MeshStandardMaterial }) {
+  const seams=useMemo(() => walkableGround.flatMap(b => {
+    const y=b.position[1]+b.size[1]/2+.012;
+    return [...Array.from({length:Math.floor(b.size[2]/4)-1},(_,j)=>({position:[b.position[0],y,b.position[2]-b.size[2]/2+(j+1)*4] as Vec3,size:[b.size[0]-.3,.008,.018] as Vec3})),
+      ...[-1,1].map(side=>({position:[b.position[0]+side*(b.size[0]/2-.24),y,b.position[2]] as Vec3,size:[.028,.008,b.size[2]-.48] as Vec3}))];
+  }),[]);
+  const inlays=useMemo(() => islands.map((b,i)=>({position:[b.position[0],b.position[1]+b.size[1]/2+.017,b.position[2]] as Vec3,size:[.03,.01,b.size[2]-7] as Vec3})),[]);
+  return <><Boxes boxes={seams} material={stone} shadows={false} /><Boxes boxes={inlays} material={brass} shadows={false} /></>;
+}
+
+function Reeds() {
+  const mesh=useRef<InstancedMesh>(null);
+  useEffect(() => {
+    const o=new Object3D();
+    for(let i=0;i<48;i++) {
+      const side=i<24?-1:1, n=i%24;
+      o.position.set(-12+side*8.8+Math.sin(i*13)*.25,6.2+(i%5)*.05,-139-n*.42);
+      o.scale.set(.022,.36+(i%7)*.055,.022);o.rotation.set(Math.sin(i)*.18,0,Math.cos(i)*.16);o.updateMatrix();mesh.current!.setMatrixAt(i,o.matrix);
+    } mesh.current!.instanceMatrix.needsUpdate=true;mesh.current!.computeBoundingSphere();
+  },[]);
+  return <instancedMesh ref={mesh} args={[undefined,undefined,48]}><coneGeometry args={[1,1,3]} /><meshStandardMaterial color="#657b65" roughness={1} /></instancedMesh>;
+}
+
+function Scenery({ dark, stone }: { dark: MeshStandardMaterial; stone: MeshStandardMaterial }) {
+  const cliffs=useRef<InstancedMesh>(null);
+  const ruins=useMemo(() => Array.from({length:12},(_,i)=>({position:[-110+i*9,13+Math.sin(i*.8)*4,-282] as Vec3,size:[2.2,25,3.2] as Vec3})),[]);
+  useEffect(() => {
+    const o=new Object3D(), color=new Color();
+    for(let i=0;i<32;i++) {
+      const side=i%2?-1:1,z=70-Math.floor(i/2)*30;
+      o.position.set(side*(170+Math.sin(i*2.4)*24),-19,z);
+      o.scale.set(33+(i%4)*6,39+(i%5)*8,34+(i%3)*7);
+      o.rotation.set(0,i*.7,.05*Math.sin(i));o.updateMatrix();cliffs.current!.setMatrixAt(i,o.matrix);
+      color.set(i%3===0?"#697f7d":"#82928a");cliffs.current!.setColorAt(i,color);
+    } cliffs.current!.instanceMatrix.needsUpdate=true;cliffs.current!.computeBoundingSphere();
+  },[]);
+  return <group>
+    <instancedMesh ref={cliffs} args={[undefined,undefined,32]}><dodecahedronGeometry args={[1,1]} /><meshStandardMaterial roughness={1} flatShading /></instancedMesh>
+    <Boxes boxes={ruins} material={dark} shadows={false} />
+    <mesh position={[-60,26,-284]} material={dark}><boxGeometry args={[115,3,6]} /></mesh>
+    <mesh position={[-87,12,-118]} rotation={[0,.5,-.25]} material={stone}><torusGeometry args={[23,1.9,8,72,Math.PI*1.65]} /></mesh>
+    <mesh position={[86,23,-233]} rotation={[0,-.5,.13]} material={dark}><torusGeometry args={[32,2.2,8,80,Math.PI*1.3]} /></mesh>
+    <mesh position={[-93,-1,-123]} material={dark}><cylinderGeometry args={[14,21,20,12]} /></mesh>
+    <mesh position={[92,0,-239]} material={dark}><cylinderGeometry args={[19,26,35,12]} /></mesh>
+  </group>;
+}
+
+function Landmark({ stone, brass }: { stone: MeshStandardMaterial; brass: MeshStandardMaterial }) {
+  const night=useGame(s=>s.night);
+  return <>
+    <RigidBody type="fixed" colliders="trimesh"><mesh position={MONUMENT.position} material={stone} castShadow receiveShadow><torusGeometry args={[MONUMENT.radius,MONUMENT.tube,12,96]} /></mesh></RigidBody>
+    <mesh position={[10,22.5,-209.88]} material={brass}><torusGeometry args={[MONUMENT.radius,.045,6,96]} /></mesh>
+    <mesh position={[10,6.025,-203]} rotation={[-Math.PI/2,0,0]} material={brass}><ringGeometry args={[5.9,6,64]} /></mesh>
+    <mesh position={[10,22.5,-211]}><sphereGeometry args={[.32,16,12]} /><meshStandardMaterial color="#f4e5b4" emissive="#e4c784" emissiveIntensity={night?1.2:.2} /></mesh>
+    <pointLight position={[10,11,-207]} color="#ffe4b3" intensity={night?60:12} distance={19} />
+  </>;
 }
 
 export function Atmosphere() {
-  const night = useGame((s) => s.night);
-  return (
-    <>
-      <Sky />
-      <NightStars />
-      <BlackHole />
-      <fog attach="fog" args={[night ? "#0b162a" : "#afc2c4", 45, 290]} />
-      <ambientLight
-        intensity={night ? 0.18 : 0.12}
-        color={night ? "#6c91ca" : "#b3cad1"}
-      />
-      <hemisphereLight
-        args={[night ? "#648ac9" : "#b3d2e2", "#454431", night ? 0.4 : 0.75]}
-      />
-      <Sunlight />
-      <Environment
-        resolution={128}
-        frames={1}
-        environmentIntensity={night ? 0.2 : 0.65}
-      >
-        <Lightformer
-          form="rect"
-          intensity={2.2}
-          color="#bcd5df"
-          scale={[100, 100, 1]}
-          position={[0, 40, 0]}
-          rotation={[Math.PI / 2, 0, 0]}
-        />
-        <Lightformer
-          form="rect"
-          intensity={4}
-          color="#ffe0b1"
-          scale={[45, 45, 1]}
-          position={[-30, 20, -40]}
-          rotation={[0, 0.6, 0]}
-        />
-      </Environment>
-    </>
-  );
+  const night=useGame(s=>s.night);
+  return <>
+    <Sky /><NightStars /><Moon />
+    <fog attach="fog" args={[night?"#182d40":"#b1c2bc",110,510]} />
+    <ambientLight intensity={night?.3:.12} color={night?"#7796b7":"#c5d6d3"} />
+    <hemisphereLight args={[night?"#9aaec9":"#deebe1",night?"#394945":"#9a8d72",night?.8:.72]} />
+    <Sunlight />
+    <Environment resolution={128} frames={1} environmentIntensity={night?.3:.6}>
+      <Lightformer form="rect" intensity={1.6} color="#c0d7dd" scale={[100,100,1]} position={[0,40,0]} rotation={[Math.PI/2,0,0]} />
+      <Lightformer form="rect" intensity={3} color="#fff0d3" scale={[45,45,1]} position={[-30,40,-60]} rotation={[0,.6,0]} />
+    </Environment>
+  </>;
 }
 
 export function World() {
-  return (
-    <>
-      <Water />
-      {islands.map((island, i) => (
-        <group key={i}>
-          <RigidBody type="fixed" colliders={false}>
-            <CuboidCollider
-              args={[
-                island.size[0] / 2,
-                island.size[1] / 2,
-                island.size[2] / 2,
-              ]}
-              position={island.position}
-            />
-            <mesh position={island.position} castShadow receiveShadow>
-              <CutStone size={island.size} />
-              <Stone />
-            </mesh>
-          </RigidBody>
-          <mesh
-            position={[
-              island.position[0],
-              island.position[1] - island.size[1] / 2 - 6,
-              island.position[2],
-            ]}
-            receiveShadow
-            castShadow
-          >
-            <boxGeometry
-              args={[island.size[0] - 2.5, 12, island.size[2] - 3]}
-            />
-            <Stone dark />
-          </mesh>
-          {/* A shallow brass inlay quietly carries the eye forward. */}
-          <mesh
-            position={[
-              island.position[0],
-              island.position[1] + island.size[1] / 2 + 0.008,
-              island.position[2],
-            ]}
-            rotation={[-Math.PI / 2, 0, 0]}
-          >
-            <planeGeometry args={[0.035, island.size[2] - 6]} />
-            <meshStandardMaterial
-              color="#99896b"
-              roughness={0.45}
-              metalness={0.5}
-            />
-          </mesh>
-          {[1, -1].map((side) => (
-            <mesh
-              key={side}
-              position={[
-                island.position[0] + side * (island.size[0] / 2 - 0.35),
-                island.position[1] + island.size[1] / 2 + 0.018,
-                island.position[2],
-              ]}
-              rotation={[-Math.PI / 2, 0, 0]}
-            >
-              <planeGeometry args={[0.04, island.size[2] - 0.7]} />
-              <meshStandardMaterial color="#a59f8c" />
-            </mesh>
-          ))}
-        </group>
-      ))}
-      {architectureBoxes.map((box, i) => (
-        <RigidBody key={`architecture-${i}`} type="fixed" colliders={false}>
-          <CuboidCollider position={box.position} args={[box.size[0] / 2, box.size[1] / 2, box.size[2] / 2]} />
-          <mesh position={box.position} castShadow receiveShadow>
-            <CutStone size={box.size} />
-            <Stone />
-          </mesh>
-        </RigidBody>
-      ))}
-      {distantFragments.map((box, i) => (
-        <RigidBody key={`fragment-${i}`} type="fixed" colliders={false}>
-          <CuboidCollider position={box.position} rotation={box.rotation} args={[box.size[0] / 2, box.size[1] / 2, box.size[2] / 2]} />
-          <mesh position={box.position} rotation={box.rotation} castShadow receiveShadow>
-            <boxGeometry args={box.size} />
-            <Stone dark={i % 3 === 0} />
-          </mesh>
-        </RigidBody>
-      ))}
-      <group position={[-80, 7, -95]} rotation={[0.15, 0.45, -0.32]}>
-        <mesh castShadow receiveShadow>
-          <torusGeometry args={[18, 2.2, 8, 72, Math.PI * 1.65]} />
-          <Stone dark />
-        </mesh>
-        <mesh position={[0, 0, 0.1]}>
-          <torusGeometry args={[18, 2.24, 4, 72, Math.PI * 0.03]} />
-          <meshStandardMaterial color="#b5a582" roughness={0.7} />
-        </mesh>
-      </group>
-      <group position={[80, 13, -228]} rotation={[0, -0.65, 0.17]}>
-        <mesh castShadow receiveShadow>
-          <torusGeometry args={[24, 2.4, 8, 80, Math.PI * 1.35]} />
-          <Stone dark />
-        </mesh>
-      </group>
-      {columns.map((column, i) => (
-        <RigidBody key={`column-${i}`} type="fixed" colliders="hull">
-          <mesh position={column.position} castShadow receiveShadow>
-            <cylinderGeometry args={[column.topRadius, column.bottomRadius, column.height, 12]} />
-            <Stone />
-          </mesh>
-        </RigidBody>
-      ))}
-      <mesh position={[-125, 18, -270]} rotation={[0, -0.15, 0]}>
-        <boxGeometry args={[130, 60, 35]} />
-        <Stone dark />
-      </mesh>
-      <mesh position={[105, 5, -310]} rotation={[0, 0.25, 0]}>
-        <boxGeometry args={[130, 70, 55]} />
-        <Stone dark />
-      </mesh>
-      <Landmark />
-    </>
-  );
+  const materials=useMemo(() => {
+    const stone=new MeshStandardMaterial({color:"#d8d0bc",roughness:.86,metalness:.02});stone.onBeforeCompile=stoneShader;
+    const dark=new MeshStandardMaterial({color:"#71817d",roughness:1});dark.onBeforeCompile=stoneShader;
+    const seams=new MeshStandardMaterial({color:"#9d9a89",roughness:1});
+    const brass=new MeshStandardMaterial({color:"#b5a274",roughness:.5,metalness:.48});
+    return {stone,dark,seams,brass};
+  },[]);
+  const foundation=useMemo(foundationGeometry,[]), cap=useMemo(()=>new RoundedBoxGeometry(1,1,1,1,.012),[]);
+  useEffect(()=>()=>{Object.values(materials).forEach(m=>m.dispose());foundation.dispose();cap.dispose();},[materials,foundation,cap]);
+  return <>
+    <Water />
+    <RigidBody type="fixed" colliders={false}>
+      {walkableGround.map((b,i)=><CuboidCollider key={`ground-${i}`} args={[b.size[0]/2,b.size[1]/2,b.size[2]/2]} position={b.position} />)}
+      {architectureBoxes.map((b,i)=><CuboidCollider key={`architecture-${i}`} args={[b.size[0]/2,b.size[1]/2,b.size[2]/2]} position={b.position} />)}
+      {distantFragments.map((b,i)=><CuboidCollider key={`fragment-${i}`} args={[b.size[0]/2,b.size[1]/2,b.size[2]/2]} position={b.position} rotation={b.rotation} />)}
+    </RigidBody>
+    {walkableGround.map((b,i)=>{const top=b.position[1]+b.size[1]/2;return <group key={i}>
+      <mesh geometry={cap} material={materials.stone} position={[b.position[0],top-.18,b.position[2]]} scale={[b.size[0],.36,b.size[2]]} castShadow receiveShadow />
+      <mesh geometry={foundation} material={materials.dark} position={[b.position[0],top-.36,b.position[2]]} scale={[b.size[0],Math.max(10,b.size[1]+4),b.size[2]]} receiveShadow />
+    </group>})}
+    <Boxes boxes={architectureBoxes} material={materials.stone} />
+    {columns.map((c,i)=><RigidBody key={i} type="fixed" colliders="hull"><mesh position={c.position} material={materials.stone} castShadow receiveShadow><cylinderGeometry args={[c.topRadius,c.bottomRadius,c.height,12]} /></mesh></RigidBody>)}
+    <GroundDetail stone={materials.seams} brass={materials.brass} /><Reeds /><Scenery dark={materials.dark} stone={materials.stone} /><Landmark stone={materials.stone} brass={materials.brass} />
+  </>;
 }

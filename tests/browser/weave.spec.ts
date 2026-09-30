@@ -2,8 +2,8 @@ import { expect, test } from "./fixtures";
 import { cross } from "./steering-helpers";
 
 test("rolling matter crosses an offset gap and keeps exactly 512 units", async ({ page }) => {
-  await page.goto("/");
-  await page.getByRole("button", { name: /Enter the world/ }).click();
+  await page.goto("/play");
+  await page.getByRole("button", { name: /^Play$/ }).click();
   await page.evaluate(() => {
     window.__livingMatter!.teleport([0, 1, -23]);
     window.__livingMatter!.formation(0, "weave");

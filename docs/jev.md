@@ -1,6 +1,6 @@
 # Living Matter with Jev
 
-[Setup](../README.md#play-with-jev) · [Architecture](architecture.md) · [Session audits](jev-session-audits.md)
+[Setup](../README.md#decision-modes) · [Architecture](architecture.md) · [Session audits](jev-session-audits.md)
 
 Set `NEXT_PUBLIC_DECISION_BACKEND=jev` and `TYPESAFE_API_KEY` in `.env.local`, then restart the server. Add `NEXT_PUBLIC_JEV_SESSION_AUDIT=1` for development recordings. Preview uses the local policy.
 

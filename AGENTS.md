@@ -1,6 +1,10 @@
 # Working on Living Matter
 
 - Use Node 24 and pnpm. Run `pnpm dev` for the world.
+- V1 is the movement companion in a flooded observatory. `/` is a static home; `/play` owns WebGL and the run. Dark UI is the default; Light and Day/Night are separate saved preferences. Keep future heist/enemy work separate.
+- Presets in `quality.ts` affect presentation only. Auto measures sustained frames and makes at most one upgrade and one downgrade per selection. Preserve explicit High.
+- New walkable space belongs in `walkableGround`; reachable obstacles must share rendering, collision and clearance dimensions. Keep the four crossing endpoints and five established islands.
+- Live production requires the shared Redis reservation in `decision-budget.ts`. Fail closed without it; local guards are not aggregate limits. See `docs/contract.md` and `docs/deployment.md`.
 - `src/game/world.ts` owns geometry; `decisions.ts` owns the replaceable selection contract. Keep selection independent of rendering and physics.
 - There is exactly one matter body. `affordances.ts` supplies bidirectional physical candidates; keep stage IDs and ordering out of the selection policy. Never retract occupied support.
 - `weave.ts` recycles only an unoccupied 256-unit half. Keep geometry independent of either decision backend. SDK calls belong in the server route; use mocked transport in tests unless live calls are explicitly requested.

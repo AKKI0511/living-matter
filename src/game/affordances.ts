@@ -1,5 +1,5 @@
 import type { Candidate } from "./decisions";
-import { islands, sites, clearMatterSection, type Site, type Vec3 } from "./world";
+import { walkableGround as islands, sites, clearMatterSection, type Site, type Vec3 } from "./world";
 import { weaveRoute } from "./weave";
 
 export function onPermanentGround(p: Vec3) {

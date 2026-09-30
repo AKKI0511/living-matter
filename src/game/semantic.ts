@@ -1,4 +1,4 @@
-import { collisionBoxes, islands, sites, boxCoordinates, WEAVE_END_CAP, type Vec3 } from "./world";
+import { collisionBoxes, walkableGround as islands, sites, boxCoordinates, WEAVE_END_CAP, type Vec3 } from "./world";
 import { bankProgress, WEAVE_SECONDS, type Weave } from "./weave";
 import type { Candidate, Observation } from "./decisions";
 

@@ -18,8 +18,8 @@ type Snapshot = {
 const snapshot = (page: Page) =>
   page.evaluate(() => window.__livingMatter!.snapshot() as Snapshot);
 async function begin(page: Page) {
-  await page.goto("/");
-  await page.getByRole("button", { name: /Enter the world/ }).click();
+  await page.goto("/play");
+  await page.getByRole("button", { name: /^Play$/ }).click();
   await expect.poll(async () => (await snapshot(page)).phase).toBe("playing");
   await expect.poll(async () => (await snapshot(page)).grounded).toBe(true);
 }
@@ -58,12 +58,12 @@ test("each crossing can form before arrival completes and restarts", async ({
   }
   await go(page, [10, 6, -202], 0.5);
   await expect(
-    page.getByRole("button", { name: /Wander again/ }),
+    page.getByRole("button", { name: /^Play again$/ }),
   ).toBeVisible();
   const finished = await snapshot(page);
   expect(finished.phase).toBe("complete");
   await page.screenshot({ path: info.outputPath("complete.png") });
-  await page.getByRole("button", { name: /Wander again/ }).click();
+  await page.getByRole("button", { name: /^Play again$/ }).click();
   await expect.poll(async () => (await snapshot(page)).time).toBeLessThan(2);
   const restarted = await snapshot(page);
   expect(restarted.player[2]).toBeGreaterThan(0.5);
@@ -89,15 +89,14 @@ test("jump, fall recovery, pause, and detail controls remain usable", async ({
   await page.keyboard.up("d");
   await expect.poll(async () => (await snapshot(page)).grounded).toBe(true);
   await page.keyboard.press("Escape");
-  await expect(page.getByRole("button", { name: /Continue/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Resume$/ })).toBeVisible();
   const frozen = (await snapshot(page)).time;
   await page.waitForTimeout(500);
   expect((await snapshot(page)).time).toBe(frozen);
-  const detail = page.getByRole("button", { name: /Detail (high|low)/ });
-  const previousDetail = await detail.textContent();
-  await detail.click();
-  await expect(detail).not.toHaveText(previousDetail!);
-  await page.getByRole("button", { name: /Start over/ }).click();
+  const detail = page.getByLabel("Graphics", { exact: true });
+  await detail.selectOption("high");
+  await expect(detail).toHaveValue("high");
+  await page.getByRole("button", { name: /^Restart$/ }).click();
   expect((await snapshot(page)).recoveries).toBe(0);
 });
 
@@ -115,16 +114,19 @@ test("waiting to inspect a formation does not repeatedly dissolve it", async ({
 
 test("repeated restarts release scene resources", async ({ page }) => {
   await begin(page);
+  await page.keyboard.press("Escape");
+  await page.getByLabel("Graphics", { exact: true }).selectOption("high");
+  await page.getByRole("button", { name: "Resume", exact: true }).click();
   await page.waitForTimeout(1000);
   const baseline = await page.evaluate(() =>
     window.__livingMatter!.renderInfo(),
   );
   for (let i = 0; i < 4; i++) {
     await page.keyboard.press("Escape");
-    await page.getByRole("button", { name: /Detail (high|low)/ }).click();
+    await page.getByLabel("Graphics", { exact: true }).selectOption("low");
     await page.waitForTimeout(100);
-    await page.getByRole("button", { name: /Detail (high|low)/ }).click();
-    await page.getByRole("button", { name: /Start over/ }).click();
+    await page.getByLabel("Graphics", { exact: true }).selectOption("high");
+    await page.getByRole("button", { name: /^Restart$/ }).click();
     await page.waitForTimeout(400);
   }
   const final = await page.evaluate(() => window.__livingMatter!.renderInfo());

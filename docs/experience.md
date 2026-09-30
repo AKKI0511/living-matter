@@ -10,7 +10,7 @@ flowchart LR
     Explore --> Cross[Cross with matter]
     Cross --> Explore
     Explore --> Arrive[Reach the light]
-    Arrive --> Restart[Wander again]
+    Arrive --> Restart[Play again]
     Restart --> Enter
     Cross --> Fall[Fall]
     Fall --> Recover[Return to safe ground]
@@ -52,4 +52,4 @@ Walk toward a crossing, then turn away. Stop halfway. Look toward another route.
 
 Preview makes these choices with rules. Jev uses judgments about your recent behavior. Both act on the same physical options, within the same authored world.
 
-Press **T** to change the light. At night, a constellation traces your route beneath the black hole. Audio, camera motion, and transformations give feedback while the screen stays mostly clear.
+Press **T** to change the light. At night, an eclipsed moon sits above the flooded observatory. Audio, camera motion, and transformations give feedback while the screen stays mostly clear.
