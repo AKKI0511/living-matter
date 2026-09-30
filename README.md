@@ -2,6 +2,8 @@
 
 Explore a world with a companion that builds paths as you move.
 
+[Play Living Matter](https://living-matter-six.vercel.app) · [Roadmap](docs/roadmap.md)
+
 ![Living matter in the flooded observatory](public/images/living-matter.webp)
 
 Walk across limestone terraces, turn toward open water, climb or head back. One body of 512 pieces builds and recycles paths while keeping occupied support in place. Reach the circular monument, or take your time exploring.
