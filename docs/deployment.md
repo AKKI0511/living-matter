@@ -1,11 +1,37 @@
-# Release configuration
+# Deploying live Jev
 
-Use Node 24 and pnpm. Set `NEXT_PUBLIC_DECISION_BACKEND=jev` for both the build and runtime, with server-only `TYPESAFE_API_KEY` and `TYPESAFE_DEFAULT_MODEL=jev-1.13.0`. Preview builds use `preview` and need no inference credentials.
+[Development](development.md) · [Architecture](architecture.md) · [Docs](README.md)
 
-Live production needs `UPSTASH_REDIS_REST_URL` and server-only `UPSTASH_REDIS_REST_TOKEN`, or the equivalent `KV_REST_API_URL` / `KV_REST_API_TOKEN` supplied by Vercel Marketplace. One Redis EVAL atomically reserves a daily aggregate budget (default 20,000 requests, configurable with `JEV_DAILY_REQUEST_LIMIT`), 70 requests/IP/minute and 250 requests/session/hour across all instances. The launch configuration limits inference to 2,000 requests/day and uses the Free Redis plan with paid upgrades disabled. Failed reservations and unavailable Redis prevent inference. IP keys use a hash of Vercel's overwritten client-IP header. The local 4-call concurrency / 120-call minute guard is only an instance guard.
+Living Matter runs on Vercel at [livingmatter.vercel.app](https://livingmatter.vercel.app). Use Node.js 24 and pnpm. The app needs a Node.js server for `/api/decision`.
 
-The endpoint accepts bounded physical state, checks same origin in production, limits the streamed body to 24 KB and three seconds, gives Jev 1.6 seconds and makes no SDK retries. Browser decisions have a two-second gate. Home, loading, pause and disposed runs do not schedule inference. Production auditing is disabled and requires no writable directories.
+## Environment
 
-Create a preview with the production configuration, verify public routes and real backend operation, then promote that exact deployment. Keep `.env*`, audits and recordings outside Git and deployment uploads. Check the GitHub repository link and Node 24 project setting explicitly. Platform DDoS protection supplements the application limits; it does not replace the shared budget.
+| Variable | Purpose |
+| --- | --- |
+| `NEXT_PUBLIC_DECISION_BACKEND=jev` | Select live Jev at build time and runtime. |
+| `TYPESAFE_API_KEY` | Server-only TypeSafe credential. |
+| `TYPESAFE_DEFAULT_MODEL=jev-1.13.0` | Pin the model used for judgments. |
+| `UPSTASH_REDIS_REST_URL` | Shared Redis REST endpoint. |
+| `UPSTASH_REDIS_REST_TOKEN` | Server-only Redis credential. |
+| `JEV_DAILY_REQUEST_LIMIT` | Aggregate daily application request cap. The hosted game uses `2000`; the code default is `20000`. |
+| `ENABLE_VERCEL_OBSERVABILITY=1` | Mount Web Analytics and Speed Insights on Vercel. |
 
-Set `ENABLE_VERCEL_OBSERVABILITY=1` in Vercel Preview and Production to mount Web Analytics and Speed Insights in the root layout. The linked project remains on Hobby and uses capped free collection; do not enable Speed Insights Plus or upgrade the plan. Leave the flag unset for local development and browser tests. See [free Speed Insights limits](https://vercel.com/docs/speed-insights/limits-and-pricing).
+Vercel Marketplace's `KV_REST_API_URL` and `KV_REST_API_TOKEN` are also supported. Set variables for both Preview and Production. Changing `NEXT_PUBLIC_DECISION_BACKEND` requires a rebuild because Next.js embeds it in the browser bundle. A Preview-backend deployment uses `preview` and needs no inference credentials.
+
+## Bound public inference
+
+[`decision-budget.ts`](../src/server/decision-budget.ts) atomically reserves requests in Redis across serverless instances. It enforces the aggregate daily cap, 70 requests per IP per minute and 250 requests per session within a one-hour window. Missing or unavailable Redis prevents live production inference. The in-memory concurrency guard protects one instance only.
+
+The endpoint validates physical state, enforces same-origin requests in production, limits the streamed body to 24 KB and gives body reading three seconds. Jev has a 1.6-second deadline with no SDK retries. The browser decision gate ordinarily expires after two seconds. Existing safe support remains in place after failure.
+
+The home page and inactive runs schedule no inference. Production auditing is disabled and needs no writable filesystem. Keep `.env.local`, recordings and audit directories out of Git and deployment uploads.
+
+## Verify and promote
+
+1. Run `pnpm typecheck`, `pnpm test` and `pnpm build`.
+2. Check the linked Vercel project, GitHub repository and Node 24 setting.
+3. Create a preview with matching build and runtime configuration.
+4. Verify `/`, direct `/play`, pause, return home and repeated Play actions. Check real backend responses with a bounded live smoke test; use mocked transport for automated provider tests.
+5. Promote that verified deployment to production and check the public domain.
+
+The hosted project uses Vercel Hobby and Free Redis with automatic paid upgrades disabled. Keep observability within [Vercel's free collection limits](https://vercel.com/docs/speed-insights/limits-and-pricing). Application request reservations bound inference attempts; they are not a provider billing report.

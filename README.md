@@ -1,39 +1,56 @@
 # Living Matter
 
-Explore a world with a companion that builds paths as you move.
+A Jev-powered companion that understands your movement and reshapes your path in real time.
 
-[Play Living Matter](https://livingmatter.vercel.app) · [Roadmap](docs/roadmap.md)
+[Play](https://livingmatter.vercel.app) · [How Jev works](docs/jev.md) · [Architecture](docs/architecture.md)
 
-![Living matter in the flooded observatory at night](public/images/living-matter-arrival-night.webp)
+![Living matter weaving a rising path through the flooded observatory at night](public/images/living-matter-arrival-night.webp)
 
-Walk across limestone terraces, turn toward open water, climb or head back. One body of 512 pieces builds and recycles paths while keeping occupied support in place. Reach the circular monument, or take your time exploring.
+Sprint toward open water. Turn halfway across a path. Look toward a higher terrace. **Jev reads your movement, gaze and recent actions to infer where you want to go**, and living matter assembles a way forward. Change your mind and the companion adapts.
 
-## Play locally
+Explore a flooded observatory with one body of 512 pieces. Bridges, rising paths and moving platforms carry you between limestone islands toward a circular monument. Two reusable halves let the companion keep rebuilding while the section beneath you stays in place.
 
-Use Node 24 and pnpm.
+## Play
+
+Open [livingmatter.vercel.app](https://livingmatter.vercel.app) on a desktop or touch device.
+
+| Action | Desktop |
+| --- | --- |
+| Move | WASD or arrow keys |
+| Look | Mouse or drag |
+| Jump | Space |
+| Sprint | Shift |
+| Pause | Escape |
+
+On touch screens, use the left stick to move, drag on the right to look, and tap Jump. The menu has sound, graphics and Day / Night settings.
+
+## Run locally
+
+Install Node.js 24 and pnpm, then run these commands.
 
 ```sh
+git clone https://github.com/AKKI0511/living-matter.git
+cd living-matter
 pnpm install
 pnpm dev
 ```
 
-Open [localhost:3000](http://localhost:3000) and select Play.
+Open [localhost:3000](http://localhost:3000). Local development starts in **Preview**, a rule-based backend that needs no API key.
 
-WASD / arrows move. Mouse / drag looks. Space jumps. Shift runs. Escape pauses. T switches Day / Night. Touch uses a left movement stick, right look area and Jump button.
+To run **live Jev intelligence**, copy [`.env.example`](.env.example) to `.env.local`, set these values and restart the server.
 
-The menu offers Resume, Restart, Back to home, Sound, Day / Night and Auto / Low / High graphics. The interface stays dark, and the world starts at night. Controls appear only in the game menu; Escape pauses desktop play, and touch devices have a Pause button. Pause and completion leave the menu unfocused, so an accidental jump key cannot resume or restart. Tab still reaches the controls. Preferences are saved locally.
-
-## Decision modes
-
-The default is Preview, requiring no key. Preview preserves a usable next half through small glances while allowing deliberate turns and departures. For live Jev intelligence, copy [`.env.example`](.env.example) to `.env.local`, set `NEXT_PUBLIC_DECISION_BACKEND=jev` and a server-only `TYPESAFE_API_KEY`, then restart. Live decisions hold existing support on provider failure and never silently switch to preview.
-
-[Jev integration](docs/jev.md) · [Player–matter contract](docs/contract.md) · [Development](docs/development.md) · [Production configuration](docs/deployment.md) · [Roadmap](docs/roadmap.md)
-
-```sh
-pnpm typecheck
-pnpm test
-pnpm build
-pnpm start
+```dotenv
+NEXT_PUBLIC_DECISION_BACKEND=jev
+TYPESAFE_API_KEY=your_server_side_key
+TYPESAFE_DEFAULT_MODEL=jev-1.13.0
 ```
 
-Project code and generated game art are [MIT licensed](LICENSE). Font licenses are in [public/licenses](public/licenses); renderer compatibility patches remain in [patches](patches).
+Get a key from [TypeSafe](https://typesafe.ai). Keep it server-side. [Development](docs/development.md) covers testing; [deployment](docs/deployment.md) covers the shared request budget required for production.
+
+## Inside the intelligence
+
+The engine builds physically legal options from the world around you. Jev judges whether you are asking for a new path and which option fits your intent. The engine checks the answer against your current position, then assembles the available matter. Movement and physics keep running while Jev responds.
+
+Read the [worked Jev example](docs/jev.md) to see the actual state, questions, typed answers and execution flow. The [architecture guide](docs/architecture.md) maps that loop to the source. The [roadmap](docs/roadmap.md) describes what comes after V1.
+
+Created by Akshat Joshi. Project code is [MIT licensed](LICENSE); bundled asset notices are in [public/licenses](public/licenses).
