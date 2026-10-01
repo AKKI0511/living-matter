@@ -1,5 +1,9 @@
 import { expect, test } from "./fixtures";
 
+// This checks uploaded transforms, not image resolution. SwiftShader needs a
+// smaller canvas to provide multiple frames inside the late-assembly window.
+if (process.env.CI) test.use({ viewport: { width: 320, height: 200 } });
+
 test("rendered pieces keep approaching the route throughout late assembly", async ({ page }) => {
   await page.addInitScript(() => {
     const prototype = WebGL2RenderingContext.prototype;
@@ -21,7 +25,9 @@ test("rendered pieces keep approaching the route throughout late assembly", asyn
   await page.goto("/play");
   await page.getByLabel("Graphics", { exact: true }).selectOption("low");
   await page.getByRole("button", { name: "Play", exact: true }).click();
-  await page.waitForTimeout(1800);
+  // Warm the actual simulation and renderer; a wall-clock wait can finish
+  // during startup on software graphics and leave too few animation frames.
+  await page.waitForFunction(() => (window.__livingMatter!.snapshot() as { time: number }).time >= 2, undefined, { polling: "raf" });
   await page.evaluate(() => window.__livingMatter!.formation(0, "bridge"));
   await expect.poll(() => page.evaluate(() => (window.__livingMatter!.snapshot() as { states: { phase: string }[] }).states[0].phase)).toBe("active");
   const samples = await page.evaluate(() => (window as unknown as { __assemblySamples: { elapsed: number; position: number[] }[] }).__assemblySamples);
