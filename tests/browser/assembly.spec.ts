@@ -27,11 +27,17 @@ test("rendered pieces keep approaching the route throughout late assembly", asyn
   const samples = await page.evaluate(() => (window as unknown as { __assemblySamples: { elapsed: number; position: number[] }[] }).__assemblySamples);
   // Observe actual matrix uploads: the former progress cap froze this entire
   // interval even though the simulation and provider continued running.
-  const early = samples.find(s => s.elapsed >= 2.8)!;
-  const middle = samples.find(s => s.elapsed >= 3.0)!;
-  const late = samples.find(s => s.elapsed >= 3.2)!;
-  expect(early).toBeDefined(); expect(middle).toBeDefined(); expect(late).toBeDefined();
+  const distinct = samples.filter((s, i) => !i || s.elapsed > samples[i - 1].elapsed);
+  expect(distinct.length).toBeGreaterThanOrEqual(2);
+  const early = distinct[0], late = distinct.at(-1)!;
   const distance = (a: typeof early, b: typeof early) => Math.hypot(...a.position.map((v, i) => v - b.position[i]));
-  expect(distance(early, middle)).toBeGreaterThan(0.01);
-  expect(distance(middle, late)).toBeGreaterThan(0.01);
+  expect(distance(early, late)).toBeGreaterThan(0.01);
+  let anchor = 0, longestHold = 0;
+  for (let i = 1; i < distinct.length; i++) {
+    if (distance(distinct[anchor], distinct[i]) > 0.00001) anchor = i;
+    else longestHold = Math.max(longestHold, distinct[i].elapsed - distinct[anchor].elapsed);
+  }
+  // A physics boundary can share a pose for one or two render frames. The
+  // former capped plateau lasted roughly half a second, on any renderer.
+  expect(longestHold).toBeLessThan(0.12);
 });

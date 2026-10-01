@@ -19,7 +19,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
       <head><link rel="preload" href="/fonts/atkinson-next-400.woff2" as="font" type="font/woff2" crossOrigin="anonymous" /><link rel="preload" href="/fonts/atkinson-mono-400.woff2" as="font" type="font/woff2" crossOrigin="anonymous" /></head>
-      <body><a className="skip" href="#main">Skip to content</a>{children}{process.env.VERCEL && <><Analytics /><SpeedInsights /></>}</body>
+      <body><a className="skip" href="#main">Skip to content</a>{children}{process.env.ENABLE_VERCEL_OBSERVABILITY === "1" && <><Analytics /><SpeedInsights /></>}</body>
     </html>
   );
 }
