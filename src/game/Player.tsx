@@ -15,7 +15,7 @@ import { useGame } from "./store";
 import { sound } from "./audio";
 import {
   DESTINATION,
-  islands,
+  walkableGround as islands,
   PLAYER_HALF_HEIGHT,
   PLAYER_RADIUS,
   sites,
@@ -275,14 +275,6 @@ export function Player({ runtime }: { runtime: Runtime }) {
       runtime.physicalHistory.record(runtime.history.at(-1)!, physicalScene(runtime), recovered);
       if (grounded) runtime.recordedRecoveries = runtime.recoveries;
       if (runtime.history.length > 40) runtime.history.shift();
-      const last = runtime.constellation.at(-1);
-      if (
-        runtime.grounded &&
-        (!last || Math.hypot(next.x - last[0], next.z - last[2]) > 1.5)
-      ) {
-        runtime.constellation.push([next.x, next.y, next.z]);
-        if (runtime.constellation.length > 320) runtime.constellation.shift();
-      }
     }
   });
   useFrame((_, dt) => {

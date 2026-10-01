@@ -34,7 +34,7 @@ jobs:
       - run: pnpm test:e2e
         timeout-minutes: 20
       - name: Check mocked live transport
-        run: pnpm exec playwright test live-transport.spec.ts
+        run: pnpm exec playwright test live-transport.spec.ts exploration.spec.ts
         env:
           NEXT_PUBLIC_DECISION_BACKEND: jev
         timeout-minutes: 8

@@ -47,7 +47,6 @@ export function createRuntime(source: DecisionSource = createDecisionSource()) {
       candidateId: string;
       outcome: "offered" | "used" | "abandoned";
     }[],
-    constellation: [] as Vec3[],
     states: sites.map(
       (s) =>
         ({

@@ -1,70 +1,62 @@
-# From movement to matter
+# Architecture
 
-[Docs](README.md) · [The experience](experience.md) · [Jev](jev.md)
+[How Jev works](jev.md) · [Development](development.md) · [Docs](README.md)
 
-The world defines possible structures. A replaceable decision source chooses an intervention. The simulation checks that choice against the player's current position before changing matter.
+Living Matter combines an authored 3D world, a physical movement engine and a Jev intent interpreter. Code finds the paths that can exist. Jev chooses the contribution that fits the player's behavior. The runtime turns that choice into moving matter and usable support.
 
 ```mermaid
 flowchart TB
     subgraph Browser
-      Input[Keyboard / mouse / touch] --> Player[Player and camera]
-      Player --> Observations[Recent movement and gaze]
-      Geometry[World geometry] --> Options[Physical candidates]
-      Observations --> Source{Decision backend}
-      Options --> Source
-      Source --> Preview[Preview rules]
-      Preview --> Gate[Decision gate]
-      Reply[Intervention] --> Gate
-      Gate --> Checks[Freshness and occupied-support checks]
-      Checks --> Matter[One matter body]
-      Matter --> Physics[Rapier collision surfaces]
-      Physics --> Player
-      Matter --> View[Three.js instances / sound]
+        Input[Movement and gaze] --> Observe[Physical observations]
+        World[World geometry] --> Candidates[Legal physical options]
+        Validate[Freshness and support checks] --> Matter[Assemble available matter]
+        Matter --> Physics[Collision and movement]
+        Physics --> Observe
+        Matter --> Render[Visuals and sound]
     end
     subgraph Server
-      Endpoint[POST /api/decision] --> SDK[TypeSafe SDK]
-      SDK --> Compose[Compose typed judgments]
+        API[Validate and reserve budget] --> Request[State and questions]
+        Request --> Jev[Jev typed judgments]
+        Jev --> Compose[Compose intervention]
     end
-    Source -->|Jev mode| Endpoint
-    Compose --> Reply
+    Observe --> API
+    Candidates --> API
+    Compose --> Validate
 ```
 
-## Keep each layer responsible for one thing
+## Browser and server
 
-| Layer | Owns | Entry points |
-| --- | --- | --- |
-| World | Islands, crossing geometry, destination | [world.ts](../src/game/world.ts), [affordances.ts](../src/game/affordances.ts) |
-| Decisions | Observation contract, backend selection, cancellation | [decisions.ts](../src/game/decisions.ts), [decision-backend.ts](../src/game/decision-backend.ts) |
-| Matter | Transformations, section reuse, support checks | [Matter.tsx](../src/game/Matter.tsx), [weave.ts](../src/game/weave.ts) |
-| Player | Movement, platform carry, camera, recovery, arrival | [Player.tsx](../src/game/Player.tsx) |
-| Presentation | Lighting, sky, post-processing, synthesized audio | [Scene.tsx](../src/game/Scene.tsx), [audio.ts](../src/game/audio.ts) |
-| Session | Pause, restart, settings, mutable simulation state | [store.ts](../src/game/store.ts), [runtime.ts](../src/game/runtime.ts) |
+Next.js serves a lightweight home at `/`. Entering `/play` mounts React Three Fiber, Three.js and Rapier. The run owns player input, observations, matter and asynchronous decisions; leaving the game disposes that run. The home page starts no simulation or inference.
 
-## Two clocks of work
+The browser sends a bounded decision context to `/api/decision`. The server validates it, reserves a shared request budget, builds semantic state and calls the TypeSafe SDK. Credentials remain on the server. Only the composed intervention returns to ordinary gameplay.
 
-```mermaid
-flowchart LR
-    Tick["Physics · 60 Hz"] --> Move[Move and collide]
-    Move --> Observe["Observe · 5 Hz"]
-    Observe --> Decide["Async decision when eligible"]
-    Decide --> Validate[Recheck current world]
-    Validate --> Tick
-    Tick --> Render[Render and interpolate]
-```
+Preview implements the same `DecisionSource` interface locally. Switching backends changes selection while retaining candidate generation, collision, assembly and support rules.
 
-Rendering and physics continue while a decision is pending. A single instanced mesh draws the 512 matter pieces; simplified collision surfaces support the player. Frame updates use mutable state rather than React renders.
+## Three independent rates
 
-Clear shore edges can launch routes anywhere within the shared world boundary. Only an unoccupied 256-piece half can rebuild. Side joins match the occupied surface's tilt, and solid obstacles constrain the offered steps before either backend selects one.
+Rapier and the game simulation advance at **60 Hz**. Player observations are sampled at **5 Hz**, with meaningful behavior changes retained as history. Jev requests run asynchronously when the player needs a new contribution, subject to caching and cooldowns. Rendering interpolates the current simulation state at the display's frame rate.
 
-## A decision can expire
+A pending model response cannot stall movement or rendering. Auto / Low / High graphics change resolution, shadows and surface presentation; they never change the physical options or provider input.
 
-```mermaid
-flowchart LR
-    Result[Decision arrives] --> Valid{Still applicable?}
-    Valid -->|No / failed / timed out| Hold[Keep current state]
-    Valid -->|Yes| Safe{Support checks pass?}
-    Safe -->|No| Hold
-    Safe -->|Yes| Apply[Apply intervention]
-```
+## From a choice to a surface
 
-Candidate identity, world revision, player position, gaze changes, and occupied sections constrain execution. Restart cancels pending work. Neither backend controls the camera, collision solver, checkpoints, or completion rules.
+The world describes shores, walkable ground, obstacles and formation dimensions. Candidate generation checks possible contributions against that geometry. During a weaving route, two 256-piece halves alternate between supporting the player and rebuilding.
+
+When an answer arrives, the runtime checks that the player still wants the offered direction, the candidate is still usable and a half is free. It also checks clearance and current support. A stale answer is discarded. An accepted contribution animates into place and becomes walkable at its physical activation time. Rendering follows that execution state.
+
+## Source map
+
+| Responsibility | Source |
+| --- | --- |
+| World bounds, islands, obstacles and formation geometry | [world.ts](../src/game/world.ts) |
+| Physically legal contributions | [affordances.ts](../src/game/affordances.ts), [weave.ts](../src/game/weave.ts) |
+| Observations and readable behavior descriptions | [semantic.ts](../src/game/semantic.ts), [decision-state.ts](../src/game/decision-state.ts) |
+| Replaceable selection interface and response gate | [decisions.ts](../src/game/decisions.ts), [decision-backend.ts](../src/game/decision-backend.ts) |
+| Model questions and answer composition | [decision-request.ts](../src/server/decision-request.ts) |
+| Server transport and shared budget | [decision route](../src/app/api/decision/route.ts), [decision-budget.ts](../src/server/decision-budget.ts) |
+| Run lifecycle, execution and freshness | [runtime.ts](../src/game/runtime.ts), [Matter.tsx](../src/game/Matter.tsx), [decision-freshness.ts](../src/game/decision-freshness.ts) |
+| Player movement and camera | [Player.tsx](../src/game/Player.tsx), [input.ts](../src/game/input.ts) |
+| Matter, environment, quality and sound | [Matter.tsx](../src/game/Matter.tsx), [EnvironmentWorld.tsx](../src/game/EnvironmentWorld.tsx), [Scene.tsx](../src/game/Scene.tsx), [quality.ts](../src/game/quality.ts), [audio.ts](../src/game/audio.ts) |
+| Menus and session settings | [Experience.tsx](../src/game/Experience.tsx), [store.ts](../src/game/store.ts) |
+
+The [player–matter contract](contract.md) defines the invariants these layers share. The [Jev walkthrough](jev.md) shows a complete request and the resulting intervention.

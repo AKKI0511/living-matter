@@ -2,9 +2,10 @@ import { expect, test } from "./fixtures";
 import { snapshot, go } from "./steering-helpers";
 
 test("a player can depart west from the starting island and turn north in open water", async ({ page }) => {
-  await page.goto("/");
-  await page.getByRole("button", { name: /Enter the world/ }).click();
-  await page.evaluate(() => { window.__livingMatter!.teleport([-9, 0.825, -3]); window.__livingMatter!.look(Math.PI / 2, 0); });
+  await page.goto("/play");
+  await page.getByRole("button", { name: /^Play$/ }).click();
+  // The new west overlook is permanent ground; depart beyond its southern end.
+  await page.evaluate(() => { window.__livingMatter!.teleport([-9, 0.825, -16]); window.__livingMatter!.look(Math.PI / 2, 0); });
   await expect.poll(async () => (await snapshot(page)).states.some(s => s.phase === "active")).toBe(true);
   const initial = (await snapshot(page)).weave!;
   expect(initial.banks[0].to[0]).toBeLessThan(-15);
@@ -23,8 +24,9 @@ test("a player can depart west from the starting island and turn north in open w
 });
 
 for (const side of [-1, 1]) test(`an inclined side connector is traversable on side ${side}`, async ({ page }) => {
-  await page.goto("/");
-  await page.getByRole("button", { name: /Enter the world/ }).click();
+  test.skip(process.env.NEXT_PUBLIC_DECISION_BACKEND === "preview", "This physical join check needs the mocked live transport to select the specified side; preview can legitimately choose nearby land.");
+  await page.goto("/play");
+  await page.getByRole("button", { name: /^Play$/ }).click();
   await page.evaluate(() => { window.__livingMatter!.teleport([-14, 0.825, -67]); window.__livingMatter!.formation(1, "weave", 0); });
   await expect.poll(async () => (await snapshot(page)).states[1].phase).toBe("active");
   const original = (await snapshot(page)).weave!.banks[0];

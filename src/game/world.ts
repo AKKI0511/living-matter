@@ -49,6 +49,9 @@ export const islands: StructureBox[] = [
   { position: [10, 0, -200], size: [30, 12, 34] },
 ];
 export const SPAWN: Vec3 = [0, 1.1, 1];
+export const terraces: StructureBox[] = [{ position: [-12, -2, -4], size: [4, 4, 12] }];
+export const walkableGround = [...islands, ...terraces];
+export const MONUMENT = { position: [10, 22.5, -211] as Vec3, radius: 15.5, tube: 1.1 };
 export const DESTINATION: Vec3 = [10, 6, -204];
 export const WORLD_LIMITS = { minX: -46, maxX: 46, minZ: -222, maxZ: 16 };
 export const WATER_LEVEL = -3;
@@ -58,9 +61,20 @@ export const architectureBoxes: StructureBox[] = [
   { position: [-7.8, 5.5, -9], size: [1.8, 11, 2.5] },
   { position: [7.8, 5.5, -9], size: [1.8, 11, 2.5] },
   { position: [0, 10.6, -9], size: [17.4, 1.5, 2.5] },
-  { position: [-7.2, 5, -57], size: [1.6, 10, 9] },
-  { position: [6.2, 11, -97], size: [1.5, 10, 14] },
-  { position: [-5, 10, -142], size: [2, 8, 8] },
+  { position: [-21.6, 1.2, -57], size: [1, 2.4, 11] },
+  { position: [-6.4, 1.2, -57], size: [1, 2.4, 11] },
+  { position: [-21.6, 3.2, -60], size: [1.4, 6.4, 1.4] },
+  { position: [-6.4, 3.2, -60], size: [1.4, 6.4, 1.4] },
+  { position: [5, 13, -97], size: [1.5, 14, 2] },
+  { position: [23, 13, -97], size: [1.5, 14, 2] },
+  { position: [14, 19.5, -97], size: [19.5, 1, 2] },
+  { position: [5, 10, -104], size: [1.5, 8, 2] },
+  { position: [23, 10, -104], size: [1.5, 8, 2] },
+  { position: [-20.8, 6.35, -144], size: [0.6, 0.7, 10] },
+  { position: [-3.2, 6.35, -144], size: [0.6, 0.7, 10] },
+  { position: [-13.6, 0.45, -4], size: [0.4, 0.9, 10] },
+  { position: [-2.5, 9, -211], size: [1.7, 6, 3] },
+  { position: [22.5, 9, -211], size: [1.7, 6, 3] },
 ];
 export const columns = Array.from({ length: 7 }, (_, i) => ({
   position: [-21, 5, -119 - i * 7] as Vec3,
@@ -68,14 +82,8 @@ export const columns = Array.from({ length: 7 }, (_, i) => ({
   topRadius: 0.9,
   bottomRadius: 1.15,
 }));
-export const distantFragments: StructureBox[] = Array.from({ length: 10 }, (_, i) => {
-  const side = i % 2 ? -1 : 1, height = 8 + (Math.sin(i * 32.8) + 1) * 19;
-  return {
-    position: [side * (42 + Math.sin(i * 6.2) * 14 + i * 0.8), height / 2 - 9, 35 - i * 22.7],
-    size: [8 + (i % 5) * 3, height, 9 + (i % 3) * 4],
-    rotation: [0, Math.sin(i * 3) * 0.35, 0],
-  };
-});
+// Background cliffs now sit outside the matter bounds; no decorative box towers.
+export const distantFragments: StructureBox[] = [];
 
 /** The same physical boundary applies to every route, including player detours. */
 export function withinMatterBounds(_site: Site, p: Vec3) {
@@ -90,7 +98,7 @@ export function clearMatterSection(from: Vec3, to: Vec3, crossSlope = 0) {
   if (run < 1) return false;
   // A section wholly above walkable ground only adds a low wall across the
   // island. Allow a shore seam, but stop recycling matter deeper onto land.
-  if (islands.some(b => [from, to].every(p =>
+  if (walkableGround.some(b => [from, to].every(p =>
     Math.abs(p[0] - b.position[0]) < b.size[0] / 2 - 0.5 &&
     Math.abs(p[2] - b.position[2]) < b.size[2] / 2 - 0.5 &&
     p[1] < b.position[1] + b.size[1] / 2 + 3))) return false;
@@ -101,7 +109,7 @@ export function clearMatterSection(from: Vec3, to: Vec3, crossSlope = 0) {
         from[1] + (to[1] - from[1]) * t + across * crossSlope,
         from[2] + dz * t + dx / run * across];
       if (!withinMatterBounds(sites[0], p)) return false;
-      if (islands.some(b => Math.abs(p[0] - b.position[0]) < b.size[0] / 2 &&
+      if (walkableGround.some(b => Math.abs(p[0] - b.position[0]) < b.size[0] / 2 &&
         Math.abs(p[2] - b.position[2]) < b.size[2] / 2 &&
         p[1] < b.position[1] + b.size[1] / 2 - 0.12)) return false;
       if ([...architectureBoxes, ...distantFragments].some(b => {
@@ -112,6 +120,8 @@ export function clearMatterSection(from: Vec3, to: Vec3, crossSlope = 0) {
       })) return false;
       if (columns.some(c => Math.hypot(p[0] - c.position[0], p[2] - c.position[2]) < c.bottomRadius + 0.35 &&
         p[1] < c.position[1] + c.height / 2 && p[1] + 1.6 > c.position[1] - c.height / 2)) return false;
+      if (Math.abs(p[2] - MONUMENT.position[2]) < MONUMENT.tube + 0.35 &&
+        Math.abs(Math.hypot(p[0] - MONUMENT.position[0], p[1] + 0.8 - MONUMENT.position[1]) - MONUMENT.radius) < MONUMENT.tube + 0.8) return false;
     }
   }
   return true;

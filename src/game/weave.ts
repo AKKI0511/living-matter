@@ -1,5 +1,5 @@
 import type { Candidate } from "./decisions";
-import { type Site, type Vec3, type MatterPose, smooth, withinMatterBounds, clearMatterSection, islands, PLAYER_RADIUS, WEAVE_END_CAP } from "./world";
+import { type Site, type Vec3, type MatterPose, smooth, withinMatterBounds, clearMatterSection, walkableGround as islands, PLAYER_RADIUS, WEAVE_END_CAP } from "./world";
 
 export const WEAVE_SECONDS = 1.6;
 export type WeaveBank = {

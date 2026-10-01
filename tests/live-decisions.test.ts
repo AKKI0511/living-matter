@@ -226,6 +226,8 @@ test("server endpoint composes a mocked Jev response without a live call", async
   const previousAuditRoot = process.env.JEV_SESSION_DIR;
   const previousAuditFlag = process.env.NEXT_PUBLIC_JEV_SESSION_AUDIT;
   const previousNodeEnv = process.env.NODE_ENV;
+  const previousRedisUrl = process.env.UPSTASH_REDIS_REST_URL;
+  const previousRedisToken = process.env.UPSTASH_REDIS_REST_TOKEN;
   const mutableEnv = process.env as Record<string, string | undefined>;
   let calls = 0;
   try {
@@ -237,6 +239,7 @@ test("server endpoint composes a mocked Jev response without a live call", async
     process.env.TYPESAFE_DEFAULT_MODEL = "jev-1.13.0";
     process.env.JEV_SESSION_DIR = auditRoot;
     globalThis.fetch = async (_input, init) => {
+      if (String(_input) === "https://budget.example") return Response.json({ result: 1 });
       calls++;
       const body = JSON.parse(init!.body as string);
       assert.deepEqual(body.state, decisionState(context.semantic));
@@ -287,15 +290,21 @@ test("server endpoint composes a mocked Jev response without a live call", async
     assert.equal(calls, 2);
 
     mutableEnv.NODE_ENV = "production";
+    process.env.UPSTASH_REDIS_REST_URL = "https://budget.example";
+    process.env.UPSTASH_REDIS_REST_TOKEN = "test-token";
     assert.equal(decisionDeadlineMs(), 2000);
     const productionContext = reachContext();
     assert.equal((await startSession(new Request("http://localhost:3000/api/decision/session", { method: "POST", body: JSON.stringify({ sessionId: productionContext.sessionId }) }))).status, 409);
-    const productionResponse = await POST(new Request("http://localhost:3000/api/decision", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(productionContext) }));
+    const productionResponse = await POST(new Request("http://localhost:3000/api/decision", { method: "POST", headers: { "Content-Type": "application/json", origin: "http://localhost:3000" }, body: JSON.stringify(productionContext) }));
     assert.equal(productionResponse.status, 200);
     assert.equal((await productionResponse.json()).auditId, undefined);
     assert.deepEqual(await readdir(auditRoot), [context.sessionId]);
     assert.equal(calls, 3);
   } finally {
+    if (previousRedisUrl === undefined) delete process.env.UPSTASH_REDIS_REST_URL;
+    else process.env.UPSTASH_REDIS_REST_URL = previousRedisUrl;
+    if (previousRedisToken === undefined) delete process.env.UPSTASH_REDIS_REST_TOKEN;
+    else process.env.UPSTASH_REDIS_REST_TOKEN = previousRedisToken;
     globalThis.fetch = previousFetch;
     if (previousBackend === undefined) delete process.env.NEXT_PUBLIC_DECISION_BACKEND;
     else process.env.NEXT_PUBLIC_DECISION_BACKEND = previousBackend;

@@ -6,6 +6,7 @@ import {
 } from "./decisions";
 import { describeCandidate } from "./semantic";
 import { currentDirectionServed, decisionState } from "./decision-state";
+import { useGame } from "./store";
 
 export const decisionBackend =
   process.env.NEXT_PUBLIC_DECISION_BACKEND === "jev" ? "jev" : "preview";
@@ -70,9 +71,11 @@ export class JevDecisions implements DecisionSource {
         // An unchanged hold needs less polling; new behavior or options changes the signature.
         (result.hold ? 8000 : Math.min(6000, Math.max(1500, result.recheckAfterMs ?? 2000)));
       this.failures = 0;
+      if (useGame.getState().providerUnavailable) useGame.setState({ providerUnavailable: false });
       return result;
     } catch (error) {
       if (!signal.aborted) {
+        if (!useGame.getState().providerUnavailable) useGame.setState({ providerUnavailable: true });
         this.failures++;
         this.nextRequest =
           performance.now() + Math.min(30000, 2000 * 2 ** this.failures);

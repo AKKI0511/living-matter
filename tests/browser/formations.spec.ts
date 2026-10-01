@@ -17,14 +17,15 @@ for (const [index, kind] of [
   [1, "stairs"],
   [2, "bridge"],
   [3, "platform"],
+  [3, "floating-path"],
 ] as [number, FormationKind][]) {
   test(`${sites[index].id} also supports ${kind} with real traversal`, async ({
     page,
   }, info) => {
     const site = sites[index];
     await page.route("**/api/decision**", route => route.fulfill({ json: { candidateId: null, hold: true } }));
-    await page.goto("/");
-    await page.getByRole("button", { name: /Enter the world/ }).click();
+    await page.goto("/play");
+    await page.getByRole("button", { name: /^Play$/ }).click();
     await page.evaluate(
       ({ index, kind, start }) => {
         window.__livingMatter!.teleport([start[0], start[1] + 1, start[2] + 2]);
@@ -68,8 +69,8 @@ test("largest formation keeps a stable render loop", async ({ page }, info) => {
     !!process.env.CI,
     "Frame-time budgets require a hardware-accelerated browser.",
   );
-  await page.goto("/");
-  await page.getByRole("button", { name: /Enter the world/ }).click();
+  await page.goto("/play");
+  await page.getByRole("button", { name: /^Play$/ }).click();
   await page.evaluate(() => {
     window.__livingMatter!.teleport([-5, 7, -151]);
     window.__livingMatter!.look(0.55, -0.2);
@@ -123,8 +124,8 @@ test("largest formation keeps a stable render loop", async ({ page }, info) => {
 test("jumping aboard a moving platform preserves transport momentum", async ({
   page,
 }) => {
-  await page.goto("/");
-  await page.getByRole("button", { name: /Enter the world/ }).click();
+  await page.goto("/play");
+  await page.getByRole("button", { name: /^Play$/ }).click();
   await page.evaluate(() => {
     window.__livingMatter!.teleport([14, 7, -109]);
     window.__livingMatter!.formation(2, "platform");

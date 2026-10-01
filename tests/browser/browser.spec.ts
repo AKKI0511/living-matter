@@ -10,8 +10,8 @@ test.describe("touch viewport", () => {
   test("entry, joystick, jump, and pause work on a narrow screen", async ({
     page,
   }) => {
-    await page.goto("/");
-    await page.getByRole("button", { name: /Enter the world/ }).tap();
+    await page.goto("/play");
+    await page.getByRole("button", { name: /^Play$/ }).tap();
     await expect(page.getByLabel("Movement joystick")).toBeVisible();
     const before = await page.evaluate(
       () =>
@@ -46,7 +46,7 @@ test.describe("touch viewport", () => {
     await page.getByRole("button", { name: "Jump", exact: true }).tap();
     await jumped;
     await page.getByRole("button", { name: "Pause", exact: true }).tap();
-    await expect(page.getByRole("button", { name: /Continue/ })).toBeVisible();
+    await expect(page.getByRole("button", { name: /^Resume$/ })).toBeVisible();
     await page.screenshot({ path: "artifacts/touch-pause.png" });
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth),
@@ -55,9 +55,9 @@ test.describe("touch viewport", () => {
 });
 
 test("graphics context loss presents a recoverable error", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/play");
   await expect(
-    page.getByRole("button", { name: /Enter the world/ }),
+    page.getByRole("button", { name: /^Play$/ }),
   ).toBeVisible();
   await page.evaluate(() =>
     document
@@ -69,6 +69,6 @@ test("graphics context loss presents a recoverable error", async ({ page }) => {
   await expect(page.getByRole("button", { name: /Try again/ })).toBeVisible();
   await page.getByRole("button", { name: /Try again/ }).click();
   await expect(
-    page.getByRole("button", { name: /Enter the world/ }),
+    page.getByRole("button", { name: /^Play$/ }),
   ).toBeVisible();
 });

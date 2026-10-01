@@ -7,9 +7,12 @@ import {
 import { beginJevCall, completeJevCall } from "@/server/jev-audit";
 import { decisionAuditEnabled } from "@/game/decision-audit-mode";
 import { decisionOriginAllowed } from "@/server/decision-origin";
+import { reserveDecision } from "@/server/decision-budget";
+import { boundedBody, BodyError } from "@/server/bounded-body";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 10;
 let client: TypeSafeClient | undefined;
 let inFlight = 0;
 let windowStart = 0;
@@ -30,27 +33,11 @@ export async function POST(request: Request) {
   }
   if (inFlight >= 4 || requests >= 120)
     return reply({ error: "Decision budget reached" }, 429);
-  // Bound bytes before parsing, including chunked requests.
-  const reader = request.body?.getReader();
-  if (!reader) return reply({ error: "Missing state" }, 400);
-  let body = "",
-    bytes = 0;
-  const decoder = new TextDecoder();
-  while (true) {
-    const chunk = await reader.read();
-    if (chunk.done) break;
-    bytes += chunk.value.byteLength;
-    if (bytes > 24000) {
-      await reader.cancel();
-      return reply({ error: "State too large" }, 413);
-    }
-    body += decoder.decode(chunk.value, { stream: true });
-  }
   let parsed;
   try {
-    parsed = decisionSchema.safeParse(JSON.parse(body + decoder.decode()));
-  } catch {
-    return reply({ error: "Invalid JSON" }, 400);
+    parsed = decisionSchema.safeParse(JSON.parse(await boundedBody(request)));
+  } catch (error) {
+    return reply({ error: "Invalid request body" }, error instanceof BodyError ? error.status : 400);
   }
   if (!parsed.success) return reply({ error: "Invalid physical state" }, 400);
   if (inFlight >= 4 || requests >= 120)
@@ -58,6 +45,10 @@ export async function POST(request: Request) {
   inFlight++;
   requests++;
   try {
+    try {
+      if (!await reserveDecision(request, parsed.data.sessionId))
+        return reply({ error: "Decision budget reached" }, 429);
+    } catch { return reply({ error: "Decision budget unavailable" }, 503); }
     const jevRequest = buildDecisionRequest(parsed.data);
     const requestedModel = process.env.TYPESAFE_DEFAULT_MODEL?.trim() || "jev-latest";
     const auditEnabled = decisionAuditEnabled();

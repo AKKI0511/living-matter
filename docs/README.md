@@ -1,23 +1,16 @@
-# Inside Living Matter
+# Living Matter docs
 
-A browser game about moving through a world with matter that responds to you.
+Living Matter is a world that understands your intent and adapts around you. Real-time Jev intelligence brings it to life through your movement, gaze and action.
 
-```mermaid
-flowchart LR
-    You["Your movement"] --> Matter["Living matter"]
-    Matter --> Path["A path takes shape"]
-    Path --> You
-    style You fill:#173039,color:#f2eddf,stroke:#c5b483
-    style Matter fill:#173039,color:#f2eddf,stroke:#c5b483
-    style Path fill:#173039,color:#f2eddf,stroke:#c5b483
-```
+Start with [the game and local setup](../README.md), or go straight to the [Jev walkthrough](jev.md).
 
-| Explore | What you will find |
+| Guide | What it explains |
 | --- | --- |
-| [The experience](experience.md) | The journey, formations, and a body that rebuilds as you walk |
-| [Architecture](architecture.md) | World, decisions, physics, and rendering |
-| [Jev](jev.md) | The exact role of AI, question batches, and decision rules |
-| [Sessions](jev-session-audits.md) | Opt-in recording, offline replay and human-labeled eval data |
-| [Development](development.md) | Run, verify, and extend the game |
-
-[Play locally](../README.md#play)
+| [Playing](experience.md) | Controls, exploration and how the companion moves with you |
+| [How Jev works](jev.md) | A complete example of state, questions, answers and a rebuilt path |
+| [Architecture](architecture.md) | The browser, server and physical simulation, with source links |
+| [Player–matter contract](contract.md) | The rules every decision and transformation must preserve |
+| [Development](development.md) | Local Preview or Jev setup, tests and where to make changes |
+| [Deployment](deployment.md) | Hosting live Jev with server-side credentials and a shared budget |
+| [Inspecting Jev decisions](jev-session-audits.md) | Record, replay and evaluate what the model actually did |
+| [Roadmap](roadmap.md) | The released experience and future directions |

@@ -1,22 +1,32 @@
-<p align="center">
-  <img src="docs/assets/living-matter.svg" alt="Living Matter. Follow the light. The way will find you." width="100%" />
-</p>
+# Living Matter
 
-<p align="center">A quiet 3D browser world. One living body. A path that moves with you.</p>
+A world that understands your intent and adapts around you. Powered by real-time Jev intelligence.
 
-<p align="center">
-  <a href="#play">Play locally</a> · <a href="docs/README.md">Explore the docs</a> · <a href="docs/jev.md">Meet Jev</a> · <a href="LICENSE">MIT</a>
-</p>
+[Play](https://livingmatter.vercel.app) · [How Jev works](docs/jev.md) · [Architecture](docs/architecture.md)
 
-Walk toward the light. Watch 512 pieces of matter gather into steps, bridges, and moving platforms. Turn around. Change your mind. See what follows.
+![Living matter weaving a rising path through the flooded observatory at night](public/images/living-matter-arrival-night.webp)
 
-Leave from any clear shore edge. While standing on matter, turn toward open space to build your own route, climb, or circle back. The surrounding sea has a shared travel boundary.
+Sprint toward open water. Change direction mid-stride. Look toward a higher terrace. **Jev understands your intent through movement, gaze and action**, bringing the world around you to life. Change your mind and the world responds.
 
-Switch to night for a living black hole and a constellation drawn from your journey. Headphones recommended.
+Explore a flooded observatory with one body of 512 pieces. Bridges, rising paths and moving platforms carry you between limestone islands toward a circular monument. Two reusable halves let the companion keep rebuilding while the section beneath you stays in place.
 
 ## Play
 
-Use Node.js 24 and pnpm 12. No API key needed for preview mode.
+Open [livingmatter.vercel.app](https://livingmatter.vercel.app) on a desktop or touch device.
+
+| Action | Desktop |
+| --- | --- |
+| Move | WASD or arrow keys |
+| Look | Mouse or drag |
+| Jump | Space |
+| Sprint | Shift |
+| Pause | Escape |
+
+On touch screens, use the left stick to move, drag on the right to look, and tap Jump. The menu has sound, graphics and Day / Night settings.
+
+## Run locally
+
+Install Node.js 24 and pnpm, then run these commands.
 
 ```sh
 git clone https://github.com/AKKI0511/living-matter.git
@@ -25,40 +35,22 @@ pnpm install
 pnpm dev
 ```
 
-Open [localhost:3000](http://localhost:3000) and enter the world.
+Open [localhost:3000](http://localhost:3000). Local development starts in **Preview**, a rule-based backend that needs no API key.
 
-| Move | Look | Jump | Run | Pause | Day / night |
-| :---: | :---: | :---: | :---: | :---: | :---: |
-| WASD / arrows | Mouse / drag | Space | Shift | Esc | T |
-
-On touch screens, use your left thumb to move, your right thumb to look, and the jump button.
-
-## Play with Jev
-
-Preview uses deterministic decisions. Live mode uses [Jev](https://docs.typesafe.ai/concepts/system-one), TypeSafe's System One model, to interpret your movement.
-
-Create `.env.local` with:
+To run **live Jev intelligence**, copy [`.env.example`](.env.example) to `.env.local`, set these values and restart the server.
 
 ```dotenv
 NEXT_PUBLIC_DECISION_BACKEND=jev
-TYPESAFE_API_KEY=your_api_key
+TYPESAFE_API_KEY=your_server_side_key
 TYPESAFE_DEFAULT_MODEL=jev-1.13.0
-NEXT_PUBLIC_JEV_SESSION_AUDIT=0
 ```
 
-Restart the dev server. Set the backend to `preview` to switch back. Live mode is experimental; [here is how it works, with example inputs and answers](docs/jev.md). To record a play session during development, set `NEXT_PUBLIC_JEV_SESSION_AUDIT=1` and restart. Auditing defaults to off and is disabled in production. Find a run with `pnpm jev:sessions --latest`, then [replay its decisions and curate eval data](docs/jev-session-audits.md). Local runs stay gitignored.
+Get a key from [TypeSafe](https://typesafe.ai). Keep it server-side. [Development](docs/development.md) covers testing; [deployment](docs/deployment.md) covers the shared request budget required for production.
 
-In one completed, audited live play (2.43 minutes), Jev made 55 calls using 136,526 input tokens and 10,034 free output tokens. At the [Jev 1.13 rate](https://docs.typesafe.ai/models) of $0.042 per million input tokens, that was about **$0.0057 per play**, or **$0.0024 per minute**. This is a measured prototype run before the latest input reduction, not a fixed price for every player.
+## Inside the intelligence
 
-## Run a production build
+The engine builds physically legal options from the world around you. Jev judges whether you are asking for a new path and which option fits your intent. The engine checks the answer against your current position, then assembles the available matter. Movement and physics keep running while Jev responds.
 
-```sh
-pnpm build
-pnpm start
-```
+Read the [worked Jev example](docs/jev.md) to see the actual state, questions, typed answers and execution flow. The [architecture guide](docs/architecture.md) maps that loop to the source. The [roadmap](docs/roadmap.md) describes what comes after V1.
 
-Use a Node.js host with WebGL 2 in the browser. Set environment variables before building; keep the API key on the server.
-
----
-
-[The experience](docs/experience.md) · [Architecture](docs/architecture.md) · [Development](docs/development.md)
+Created by Akshat Joshi. Project code is [MIT licensed](LICENSE); bundled asset notices are in [public/licenses](public/licenses).

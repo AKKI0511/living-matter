@@ -1,55 +1,31 @@
-# A path that moves with you
+# Playing Living Matter
 
-[Docs](README.md) · [Architecture](architecture.md) · [Jev](jev.md)
+[Play](https://livingmatter.vercel.app) · [How Jev works](jev.md) · [Docs](README.md)
 
-Follow the illuminated destination across a small world of islands, water, and open air. Matter gathers nearby and offers a crossing. You can take it, hesitate, look elsewhere, or head back.
+Explore five islands in a flooded observatory. Living matter follows your intent, assembling crossings and rebuilding as you change direction. Reach the circular monument at the far end, or explore the terraces along the way.
 
-```mermaid
-flowchart LR
-    Enter[Enter] --> Explore[Explore]
-    Explore --> Cross[Cross with matter]
-    Cross --> Explore
-    Explore --> Arrive[Reach the light]
-    Arrive --> Restart[Wander again]
-    Restart --> Enter
-    Cross --> Fall[Fall]
-    Fall --> Recover[Return to safe ground]
-    Recover --> Explore
-```
+## Controls
 
-## One body, 512 pieces
+| Action | Desktop | Touch |
+| --- | --- | --- |
+| Move | WASD or arrow keys | Left stick |
+| Look | Mouse or drag | Drag on the right |
+| Jump | Space | Jump button |
+| Sprint | Shift | Keyboard only |
+| Pause | Escape | Pause button |
 
-The same matter travels between crossings. During a rolling route, two groups of 256 pieces take turns supporting you and rebuilding. A four-section crossing needs only two sections present at once.
+Use the menu to resume, restart, return home, change sound, choose Auto / Low / High graphics, or switch Day / Night. **T** also switches Day / Night on desktop.
 
-```mermaid
-flowchart TB
-    subgraph First["1 · Walk onto the second section"]
-      A["A · 256 pieces behind you"] --> B["B · 256 pieces beneath you"]
-    end
-    subgraph Next["2 · The free half moves ahead"]
-      B2["B · Keeps supporting you"] --> A2["A · Rebuilds the next section"]
-    end
-    A -. Recycle .-> A2
-    B --> B2
-    style B fill:#173039,color:#f2eddf,stroke:#c5b483
-    style B2 fill:#173039,color:#f2eddf,stroke:#c5b483
-```
+## Move, then change your mind
 
-As you cross, new choices can bend the route or change its height. Returning can rebuild sections behind you. Occupied support stays in place while the other half transforms.
+Approach an edge and look across the gap. Run and jump, turn toward another opening, or look toward higher ground. Jev uses these actions together to judge the next contribution. A brief glance and a deliberate departure carry different evidence.
 
-| Shape | What it lets you do |
-| --- | --- |
-| Steps | Gain or lose height |
-| Bridge or floating walkway | Walk across a gap or over water |
-| Moving platform | Ride between shores while walking freely on deck |
-| Rolling route | Chain sections together using the same two halves |
+Matter can form bridges, steps, floating walkways, moving decks and weaving routes. On a moving deck, board after it assembles and ride toward the next shore. A weaving route can bend or rise as you cross it.
 
-Ordinary play offers rolling routes and moving platforms. Individual whole-span formations are also available in the development harness.
+All paths come from the same 512 pieces. On a rolling route, one 256-piece half supports you while the other moves ahead or rebuilds behind you. Wait for assembly to finish before stepping onto a new section. The half beneath you stays in place.
 
-## Try changing your mind
+Falling returns you to safe ground. Reaching the monument offers Play again or Back to home.
 
-Walk toward a crossing, then turn away. Stop halfway. Look toward another route. Return to a shore you already visited. These actions give the decision backend fresh evidence about where you want to go.
+## Preview and live Jev
 
-Preview makes these choices with rules. Jev uses judgments about your recent behavior. Both act on the same physical options, within the same authored world.
-
-Press **T** to change the light. At night, a constellation traces your route beneath the black hole. Audio, camera motion, and transformations give feedback while the screen stays mostly clear.
+**Live Jev intelligence** interprets your behavior through the model. **Preview** chooses physical options with local rules and works without credentials. The menu identifies the active backend. Both use the same world, movement and matter engine; Jev unavailability keeps existing support and never silently switches the run to Preview.
