@@ -19,8 +19,13 @@ test("home/play cycles, Back, pause, preferences and focus clean up the run", as
   await page.goto("/");
   await expect(page.locator("canvas")).toHaveCount(0);
   await expect(page.getByRole("button", { name: /mode$/ })).toHaveCount(0);
-  await expect(page.getByRole("region", { name: "How to play" })).toBeVisible();
-  await expect(page.getByRole("img", { name: /Move with/ })).toBeVisible();
+  const controls = page.getByRole("region", { name: "Controls" });
+  await expect(controls).toBeVisible();
+  await expect(controls.locator("svg")).toHaveCount(0);
+  await expect(controls.locator(".keyboard-guide").getByText("Move", { exact: true })).toBeVisible();
+  await expect(controls.locator(".keyboard-guide").getByText("Jump", { exact: true })).toBeVisible();
+  await expect(controls.getByText("Sprint", { exact: true })).toBeVisible();
+  await expect(controls.locator(".keyboard-guide > div")).toHaveCount(3);
   for (let cycle = 0; cycle < 3; cycle++) {
     await page.getByRole("link", { name: "Play", exact: true }).click();
     await page.getByLabel("Graphics", { exact: true }).selectOption("low");

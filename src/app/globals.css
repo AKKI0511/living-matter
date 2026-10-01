@@ -26,15 +26,16 @@ h1 { font-weight: 500; letter-spacing: -.035em; text-wrap: balance; margin: 0 0 
 .home nav a { min-height: 44px; display: inline-flex; align-items: center; }
 .poster { margin: 0; background: var(--raised); aspect-ratio: 16/9; overflow: hidden; }
 .poster img { width: 100%; height: auto; display: block; }
-.control-guide { padding: 20px 0 28px; margin: 0 0 28px; border-top: 1px solid var(--line); }
-.control-guide h2 { font-size: 18px; font-weight: 500; margin: 0 0 20px; }
-.keyboard-guide { display: flex; gap: clamp(12px, 4vw, 64px); align-items: center; justify-content: space-between; max-width: 900px; }
-.keyboard-guide > svg { width: clamp(76px, 10vw, 120px); height: auto; flex: 0 1 120px; }
+.control-guide { padding: 18px 0 22px; margin: 0 0 24px; border-top: 1px solid var(--line); }
+.control-guide h2 { font-size: 18px; font-weight: 500; margin: 0 0 12px; }
+.control-guide dl { margin: 0; max-width: 420px; }
+.control-guide dl > div { display: grid; grid-template-columns: 84px 1fr; gap: 16px; padding: 3px 0; }
+.control-guide dt { color: var(--secondary); }
+.control-guide dd { margin: 0; }
+.control-guide kbd { font: 14px/1.6 "Atkinson Hyperlegible Mono", monospace; }
 .finger-guide { display: none; }
 .compact.control-guide { margin: 20px 0 12px; padding: 18px 0 0; }
-.compact .keyboard-guide { gap: 6px; }
-.compact .keyboard-guide > svg { width: 64px; }
-.compact h2 { font-size: 15px; margin-bottom: 14px; }
+.compact h2 { font-size: 15px; margin-bottom: 8px; }
 .home footer { display: flex; align-items: center; gap: 8px; padding: 20px 0 32px; font: 13px/1.6 "Atkinson Hyperlegible Mono", monospace; color: var(--muted); }
 .home footer > span:last-child { margin-left: auto; padding: 12px 0; }
 .experience { position: fixed; inset: 0; overflow: hidden; background: #102d37; }
@@ -56,10 +57,9 @@ h1 { font-weight: 500; letter-spacing: -.035em; text-wrap: balance; margin: 0 0 
 .hint { position: absolute; bottom: max(24px, env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); width: min(420px, 90%); margin: 0; color: #eae9e6; pointer-events: none; }
 .hint .control-guide { border: none; margin: 0; padding: 0; filter: drop-shadow(0 1px 3px #000); }
 .hint h2 { display: none; }
-.hint .keyboard-guide > svg { width: 48px; }
 .touch-controls, .touch-copy { display: none; }
 .noscript { position: fixed; inset: 0; background: var(--bg); display: grid; place-items: center; }
-@media (max-width: 760px) { .home { width: calc(100% - 40px); } .home-intro { padding: 32px 0 24px; } .home-intro p { font-size: 19px; } .poster { margin: 0 -20px; } .menu { padding: 24px; } .keyboard-guide { gap: 6px; } .keyboard-guide > svg { min-width: 0; width: 18%; } .home footer { flex-wrap: wrap; font-size: 11px; } }
+@media (max-width: 760px) { .home { width: calc(100% - 40px); } .home-intro { padding: 32px 0 24px; } .home-intro p { font-size: 19px; } .poster { margin: 0 -20px; } .menu { padding: 24px; } .home footer { flex-wrap: wrap; font-size: 11px; } }
 @media (any-pointer: coarse) { .pause { display: block; } }
 @media (pointer: coarse) {
  .desktop { display: none; } .touch-copy { display: inline; }
@@ -68,8 +68,7 @@ h1 { font-weight: 500; letter-spacing: -.035em; text-wrap: balance; margin: 0 0 
  .touch-move span { width: 36px; height: 36px; border: 1px solid rgb(255 255 255 / .4); border-radius: 50%; }
  .touch-look { position: absolute; top: 0; right: 0; bottom: 145px; width: 50%; touch-action: none; pointer-events: auto; }
  .touch-jump { position: absolute; right: 24px; bottom: max(48px, env(safe-area-inset-bottom)); color: #eae9e6; border-color: rgb(255 255 255 / .3); background: rgb(23 23 22 / .5); touch-action: none; pointer-events: auto; min-width: 70px; min-height: 70px; }
- .hint { bottom: 165px; width: 120px; } .pause { right: 16px; }
- .keyboard-guide { display: none; } .finger-guide { display: block; max-width: 320px; } .finger-guide > svg { width: 100%; height: auto; }
- .compact .finger-guide { max-width: 190px; margin: auto; }
+ .hint { bottom: 165px; width: 250px; } .pause { right: 16px; }
+ .keyboard-guide { display: none; } .finger-guide { display: block; }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; scroll-behavior: auto !important; } }

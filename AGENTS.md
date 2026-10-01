@@ -2,7 +2,7 @@
 
 - Use Node 24 and pnpm. Run `pnpm dev` for the world.
 - V1 is the movement companion in a flooded observatory. `/` is a static home; `/play` owns WebGL and the run. The UI is permanently dark; Day/Night changes only the world. Keep future heist/enemy work separate.
-- Use the paired real-game night/day posters in `public/images`; the home defaults to night. Visible diagrams teach controls. Desktop play uses Escape; the Pause button is for touch devices. Keep Vercel Analytics and Speed Insights in the root layout for deployments.
+- Use the paired real-game night/day posters in `public/images`; the home defaults to night. Keep controls short: Move, Jump and Sprint only. Desktop play uses Escape; the Pause button is for touch devices. Keep Vercel Analytics and Speed Insights in the root layout for deployments.
 - Presets in `quality.ts` affect presentation only. Auto measures sustained frames and makes at most one upgrade and one downgrade per selection. Preserve explicit High.
 - New walkable space belongs in `walkableGround`; reachable obstacles must share rendering, collision and clearance dimensions. Keep the four crossing endpoints and five established islands.
 - Live production requires the shared Redis reservation in `decision-budget.ts`. Fail closed without it; local guards are not aggregate limits. See `docs/contract.md` and `docs/deployment.md`.

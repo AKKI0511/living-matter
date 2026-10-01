@@ -10,7 +10,7 @@ export default function Home() {
       <nav aria-label="Start"><Link id="play-link" className="primary" href="/play" prefetch={false}>Play</Link><a href="https://github.com/AKKI0511/living-matter">GitHub</a></nav>
     </div>
     <ControlGuide />
-    <figure className="poster"><Image src="/images/living-matter-night.webp" alt="Living matter assembling a branching path across the flooded observatory at night." width={1920} height={1080} priority sizes="(max-width: 760px) 100vw, 1200px" /></figure>
+    <figure className="poster"><Image src="/images/living-matter-observatory-night.webp" alt="Living matter building stairs between islands in the flooded observatory at night." width={1920} height={1080} priority sizes="(max-width: 760px) 100vw, 1200px" /></figure>
     <footer><span>© 2026 Akshat Joshi</span><span>Powered by <a href="https://typesafe.ai">Jev</a></span></footer>
   </main>;
 }
