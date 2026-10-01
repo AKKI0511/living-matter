@@ -23,15 +23,18 @@ test("High keeps linear intermediate color and follows DPR changes at fixed CSS 
   await expect.poll(async () => (await inspect()).pipeline?.buffer).toEqual(resized);
   expect((await inspect()).pipeline?.aoBuffer).toEqual(resized);
   expect(await page.locator("canvas").boundingBox()).toEqual(cssSize);
+  // Three allocates render-target textures lazily on the first composed frame.
+  await expect.poll(async () => (await inspect()).textures).toBeGreaterThan(6);
   const initial = await inspect();
   for (let cycle = 0; cycle < 3; cycle++) {
     await graphics.selectOption("low");
     await expect.poll(async () => (await inspect()).pipeline).toBeNull();
     await graphics.selectOption("high");
     await expect.poll(async () => (await inspect()).pipeline?.buffer).toEqual(resized);
-    const current = await inspect();
-    expect(current.textures).toBe(initial.textures);
-    expect(current.geometries).toBe(initial.geometries);
+    await expect.poll(async () => {
+      const current = await inspect();
+      return { textures: current.textures, geometries: current.geometries };
+    }).toEqual({ textures: initial.textures, geometries: initial.geometries });
   }
   await cdp.detach();
 });
