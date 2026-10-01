@@ -36,12 +36,18 @@ test("shore pillars and formerly decorative columns stop physical movement", asy
       window.__livingMatter!.teleport([o.x + o.side * 3, o.top + 0.825, o.z]);
       window.__livingMatter!.look(o.side * Math.PI / 2, 0);
     }, o);
+    await expect.poll(async () => {
+      const p = (await snapshot(page)).player;
+      return Math.hypot(p[0] - (o.x + o.side * 3), p[2] - o.z);
+    }).toBeLessThan(0.1);
     await expect.poll(async () => (await snapshot(page)).grounded).toBe(true);
     await page.bringToFront();
     await page.keyboard.down("w");
     await expect.poll(async () => Math.abs((await snapshot(page)).player[0] - (o.x + o.side * 3)), { timeout: 6000 })
       .toBeGreaterThan(0.3);
-    await page.waitForTimeout(900);
+    const started = await page.evaluate(() => (window.__livingMatter!.snapshot() as { time: number }).time);
+    // Collision needs sustained simulated movement, even when software frames stall.
+    await expect.poll(() => page.evaluate(() => (window.__livingMatter!.snapshot() as { time: number }).time), { timeout: 30_000 }).toBeGreaterThan(started + 1.3);
     await page.keyboard.up("w");
     const state = await snapshot(page);
     if (o.round) {
@@ -57,9 +63,14 @@ test("shore pillars and formerly decorative columns stop physical movement", asy
     window.__livingMatter!.teleport([4, 6.825, -206]);
     window.__livingMatter!.look(0, 0);
   });
+  await expect.poll(async () => {
+    const p = (await snapshot(page)).player;
+    return Math.hypot(p[0] - 4, p[2] + 206);
+  }).toBeLessThan(0.1);
   await expect.poll(async () => (await snapshot(page)).grounded).toBe(true);
   await page.keyboard.down("w");
-  await page.waitForTimeout(2000);
+  const ringStarted = await page.evaluate(() => (window.__livingMatter!.snapshot() as { time: number }).time);
+  await expect.poll(() => page.evaluate(() => (window.__livingMatter!.snapshot() as { time: number }).time), { timeout: 30_000 }).toBeGreaterThan(ringStarted + 2);
   await page.keyboard.up("w");
   const atRing = await snapshot(page);
   // A rounded contact can either stop or slide the capsule at the lower arc.
