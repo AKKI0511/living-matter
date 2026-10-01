@@ -1,5 +1,39 @@
 import { expect, test } from "./fixtures";
-import { cross } from "./steering-helpers";
+import { cross, snapshot } from "./steering-helpers";
+
+test("small glances keep the next half usable through the first handoff", async ({ page }) => {
+  await page.addInitScript(() => { HTMLCanvasElement.prototype.requestPointerLock = () => Promise.reject(new Error("Drag fallback")); });
+  await page.goto("/play");
+  await page.getByRole("button", { name: "Play", exact: true }).click();
+  await page.evaluate(() => { window.__livingMatter!.teleport([0, .825, -23]); window.__livingMatter!.formation(0, "weave"); });
+  await expect.poll(async () => (await snapshot(page)).states[0].phase).toBe("active");
+  const initial = (await snapshot(page)).weave!;
+  const first = initial.banks[0], next = initial.banks[1];
+  const position = first.from.map((v, i) => v * .14 + first.to[i] * .86 + (i === 1 ? .885 : 0));
+  const yaw = Math.atan2(-(first.to[0] - first.from[0]), -(first.to[2] - first.from[2]));
+  await page.evaluate(({ position, yaw }) => { window.__livingMatter!.teleport(position as [number, number, number]); window.__livingMatter!.look(yaw, .23); }, { position, yaw });
+  await expect.poll(async () => (await snapshot(page)).player[2]).toBeLessThan(-29);
+  await expect.poll(async () => (await snapshot(page)).grounded).toBe(true);
+  const time = await page.evaluate(() => (window.__livingMatter!.snapshot() as { time: number }).time);
+  await page.waitForFunction(time => (window.__livingMatter!.snapshot() as { time: number }).time > time + .65, time);
+  expect((await snapshot(page)).weave!.banks).toEqual(initial.banks);
+  const target = next.from.map((v, i) => v * .3 + next.to[i] * .7);
+  await page.keyboard.down("w");
+  try {
+    await expect.poll(async () => {
+      const state = await snapshot(page), p = state.player;
+      // Keep walking, with small left/right glances and larger up/down glances.
+      await page.evaluate(({ yaw, pitch }) => window.__livingMatter!.look(yaw, pitch), {
+        yaw: Math.atan2(-(target[0] - p[0]), -(target[2] - p[2])) + Math.sin(p[2] * 3) * .06,
+        pitch: Math.sin(p[2]) * .26,
+      });
+      expect(state.recoveries).toBe(0);
+      expect(state.weave!.banks[1]).toEqual(next);
+      return Math.hypot(p[0] - target[0], p[2] - target[2]);
+    }, { timeout: 25_000, intervals: [80] }).toBeLessThan(.65);
+  } finally { await page.keyboard.up("w"); }
+  expect((await snapshot(page)).grounded).toBe(true);
+});
 
 test("rolling matter crosses an offset gap and keeps exactly 512 units", async ({ page }) => {
   await page.goto("/play");

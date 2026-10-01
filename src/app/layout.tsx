@@ -7,8 +7,8 @@ export const metadata: Metadata = {
   metadataBase: new URL(process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000"),
   title: "Living Matter",
   description: "Explore a world with a companion that builds paths as you move.",
-  openGraph: { title: "Living Matter", description: "Explore a world with a companion that builds paths as you move.", images: [{ url: "/images/living-matter-observatory-night.webp", width: 1920, height: 1080 }] },
-  twitter: { card: "summary_large_image", title: "Living Matter", images: ["/images/living-matter-observatory-night.webp"] },
+  openGraph: { title: "Living Matter", description: "Explore a world with a companion that builds paths as you move.", images: [{ url: "/images/living-matter-arrival-night.webp", width: 1920, height: 1080 }] },
+  twitter: { card: "summary_large_image", title: "Living Matter", images: ["/images/living-matter-arrival-night.webp"] },
 };
 export const viewport: Viewport = {
   width: "device-width",

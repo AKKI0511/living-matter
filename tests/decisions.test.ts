@@ -5,6 +5,9 @@ import {
   ScenarioDecisions,
   type Intervention,
 } from "../src/game/decisions";
+import { createWeave, weaveRoute, weaveCandidates } from "../src/game/weave";
+import { describeMatter, describePhysical } from "../src/game/semantic";
+import { sites, type Vec3 } from "../src/game/world";
 const candidate = {
   id: "reach:bridge",
   siteId: "reach",
@@ -17,7 +20,7 @@ test("scenario source selects a validated candidate; empty contexts permit no in
   assert.equal(await gate.request({ observations: [], candidates: [] }), null);
 });
 
-test("preview considers a branch at a matter rim even when the old deck continues ahead", async () => {
+test("preview keeps an approaching half at a rim and still permits a deliberate side departure", async () => {
   const branch = { ...candidate, id: "branch", kind: "weave" as const,
     physical: { from: [0, 0, -25] as [number, number, number], to: [0, 0, -31] as [number, number, number],
       distance: 1, span: 6, rise: 0, medium: "air" as const } };
@@ -29,9 +32,11 @@ test("preview considers a branch at a matter rim even when the old deck continue
     semantic: { player_now: player, recent_behavior_oldest_to_newest: [player],
       matter_now: { state: "active" as const, player_supported_by_matter: true } } };
   const source = new ScenarioDecisions(), signal = new AbortController().signal;
-  assert.equal((await source.select(base, signal)).candidateId, branch.id);
+  assert.equal((await source.select(base, signal)).hold, true);
   assert.equal((await source.select({ ...base, semantic: { ...base.semantic,
     player_now: { ...player, position_on_support: "inside the support" } } }, signal)).hold, true);
+  assert.equal((await source.select({ ...base, semantic: { ...base.semantic,
+    player_now: { ...player, motion: "walking right", facing_into: "open air" } } }, signal)).candidateId, branch.id);
 });
 test("a reset invalidates an in-flight response", async () => {
   let resolve!: (value: Intervention) => void;
@@ -45,6 +50,26 @@ test("a reset invalidates an in-flight response", async () => {
   gate.reset();
   resolve({ candidateId: candidate.id });
   assert.equal(await pending, null);
+});
+
+test("preview preserves ready support through pitch and small yaw changes, then allows a real turn", async () => {
+  const weave = createWeave(weaveRoute(sites[0]), 0), bank = weave.banks[0];
+  const position = bank.from.map((v, i) => v * .14 + bank.to[i] * .86 + (i === 1 ? .885 : 0)) as Vec3;
+  const yaw = Math.atan2(-(bank.to[0] - bank.from[0]), -(bank.to[2] - bank.from[2]));
+  const scene = { time: 5, activeSite: 0, phase: "active" as const, kind: "weave", weave };
+  const candidates = weaveCandidates(weave, sites[0], position, 5)!.candidates;
+  const source = new ScenarioDecisions();
+  const choose = async (angle: number, pitch: number) => {
+    const o = { time: 5, position, velocity: [0, 0, 0] as Vec3, gaze: [-Math.sin(angle) * Math.cos(pitch), Math.sin(pitch), -Math.cos(angle) * Math.cos(pitch)] as Vec3, grounded: true, activeStructure: "reach" };
+    const player_now = describePhysical(o, scene);
+    return source.select({ generation: 0, observations: [o], candidates,
+      semantic: { player_now, recent_behavior_oldest_to_newest: [player_now], matter_now: describeMatter(o, scene) } }, new AbortController().signal);
+  };
+  for (const offset of [-.12, 0, .12]) for (const pitch of [-.3, 0, .3])
+    assert.equal((await choose(yaw + offset, pitch)).hold, true);
+  assert.ok((await choose(yaw + Math.PI / 2, 0)).candidateId);
+  // Turning back here already leads to the arrival shore, so retain that route.
+  assert.equal((await choose(yaw + Math.PI, 0)).hold, true);
 });
 test("unknown decisions, no intervention and provider failures are safe", async () => {
   for (const id of ["unknown", null]) {

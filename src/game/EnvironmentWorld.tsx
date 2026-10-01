@@ -117,7 +117,18 @@ function GroundDetail({ stone, brass }: { stone: MeshStandardMaterial; brass: Me
       ...[-1,1].map(side=>({position:[b.position[0]+side*(b.size[0]/2-.24),y,b.position[2]] as Vec3,size:[.028,.008,b.size[2]-.48] as Vec3}))];
   }),[]);
   const inlays=useMemo(() => islands.map((b,i)=>({position:[b.position[0],b.position[1]+b.size[1]/2+.017,b.position[2]] as Vec3,size:[.03,.01,b.size[2]-7] as Vec3})),[]);
-  return <><Boxes boxes={seams} material={stone} shadows={false} /><Boxes boxes={inlays} material={brass} shadows={false} /></>;
+  const surveyMarks=useMemo(() => Array.from({length:12},(_,i)=>({
+    position:[-5+Math.sin(i*Math.PI/6)*1.65,.021,-22.8+Math.cos(i*Math.PI/6)*1.65] as Vec3,
+    size:[.025,.002,i%3===0?.3:.13] as Vec3, rotation:[0,i*Math.PI/6,0] as Vec3,
+  })),[]);
+  return <><Boxes boxes={seams} material={stone} shadows={false} /><Boxes boxes={inlays} material={brass} shadows={false} />
+    <Boxes boxes={surveyMarks} material={brass} shadows={false} />
+    {/* Flush survey marks belong to the arrival terrace's existing stone surface. */}
+    <group position={[-5, .021, -22.8]} rotation={[-Math.PI / 2, 0, 0]}>
+      <mesh material={brass}><ringGeometry args={[1.88, 1.9, 64]} /></mesh>
+      <mesh material={stone}><ringGeometry args={[2.11, 2.14, 64]} /></mesh>
+    </group>
+  </>;
 }
 
 function Reeds() {
@@ -136,6 +147,17 @@ function Reeds() {
 function Scenery({ dark, stone }: { dark: MeshStandardMaterial; stone: MeshStandardMaterial }) {
   const cliffs=useRef<InstancedMesh>(null);
   const ruins=useMemo(() => Array.from({length:12},(_,i)=>({position:[-110+i*9,13+Math.sin(i*.8)*4,-282] as Vec3,size:[2.2,25,3.2] as Vec3})),[]);
+  // A submerged meridian hall grounds the large ring in architecture. Its
+  // nearest surface is beyond the playable/matter bounds, with no approach.
+  const hall=useMemo(() => Array.from({length:9},(_,i) => {
+    const angle=-Math.PI*.78+i*Math.PI*.18, x=-87+Math.cos(angle)*25, z=-124+Math.sin(angle)*19;
+    const height=[17,22,27,24,19,23,26,18,13][i];
+    return [
+      {position:[x,-7+height/2,z] as Vec3,size:[2.6,height,2.6] as Vec3},
+      {position:[x,-7+height-.5,z] as Vec3,size:[4.2,1.2,3.8] as Vec3},
+      ...(i>1&&i<7?[{position:[x,-7+height+1,z] as Vec3,size:[7.4,1.3,3.1] as Vec3,rotation:[0,-angle,0] as Vec3}]:[]),
+    ];
+  }).flat(),[]);
   useEffect(() => {
     const o=new Object3D(), color=new Color();
     for(let i=0;i<32;i++) {
@@ -149,6 +171,9 @@ function Scenery({ dark, stone }: { dark: MeshStandardMaterial; stone: MeshStand
   return <group>
     <instancedMesh ref={cliffs} args={[undefined,undefined,32]}><dodecahedronGeometry args={[1,1]} /><meshStandardMaterial roughness={1} flatShading /></instancedMesh>
     <Boxes boxes={ruins} material={dark} shadows={false} />
+    <Boxes boxes={hall} material={stone} shadows={false} />
+    <mesh position={[-87,-5,-124]} material={dark}><cylinderGeometry args={[28,32,8,48]} /></mesh>
+    <mesh position={[-87,-1.1,-124]} material={stone}><cylinderGeometry args={[27,28,.6,48]} /></mesh>
     <mesh position={[-60,26,-284]} material={dark}><boxGeometry args={[115,3,6]} /></mesh>
     <mesh position={[-87,12,-118]} rotation={[0,.5,-.25]} material={stone}><torusGeometry args={[23,1.9,8,72,Math.PI*1.65]} /></mesh>
     <mesh position={[86,23,-233]} rotation={[0,-.5,.13]} material={dark}><torusGeometry args={[32,2.2,8,80,Math.PI*1.3]} /></mesh>

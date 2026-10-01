@@ -22,8 +22,8 @@ function pause() { useGame.getState().setPhase("paused"); document.exitPointerLo
 
 export default function Experience() {
   const { phase, muted, quality, night, run, slow, providerUnavailable } = useGame();
-  const [mounted, setMounted] = useState(false), [hint, setHint] = useState(true);
-  const action = useRef<HTMLButtonElement>(null);
+  const [mounted, setMounted] = useState(false);
+  const menuHeading = useRef<HTMLHeadingElement>(null);
   useEffect(() => {
     restorePreferences(); clearInput(); input.yaw = 0; input.pitch = -0.03;
     useGame.setState({ phase: "loading", providerUnavailable: false, reducedMotion: matchMedia("(prefers-reduced-motion: reduce)").matches, run: useGame.getState().run + 1 });
@@ -41,7 +41,7 @@ export default function Experience() {
       if (useGame.getState().phase !== "playing") return;
       if (["Space", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.code)) e.preventDefault();
       if (e.code === "Space" && !e.repeat) input.jumpQueued = true;
-      keys.add(e.code); update(); setHint(false);
+      keys.add(e.code); update();
     };
     const up = (e: KeyboardEvent) => { keys.delete(e.code); if (useGame.getState().phase === "playing") update(); };
     const mouse = (e: MouseEvent) => {
@@ -72,13 +72,13 @@ export default function Experience() {
     };
   }, []);
   useEffect(() => { sound.mute(muted); }, [muted]);
-  useEffect(() => { setHint(true); }, [run]);
   useEffect(() => {
-    if (phase !== "playing") { action.current?.focus(); return; }
-    const timer = setTimeout(() => setHint(false), 7000); return () => clearTimeout(timer);
+    // Announce the menu without making a held jump key activate Resume/Play again.
+    if (phase !== "playing") menuHeading.current?.focus({ preventScroll: true });
   }, [phase, run]);
-  const begin = () => { void sound.start().catch(() => {}); useGame.getState().setPhase("playing"); action.current?.blur(); capturePointer(); };
-  const restart = () => { clearInput(); input.yaw = 0; input.pitch = -0.03; sound.reset(); useGame.getState().restart(); action.current?.blur(); capturePointer(); };
+  const blurAction = () => { if (document.activeElement instanceof HTMLElement) document.activeElement.blur(); };
+  const begin = () => { void sound.start().catch(() => {}); useGame.getState().setPhase("playing"); blurAction(); capturePointer(); };
+  const restart = () => { clearInput(); input.yaw = 0; input.pitch = -0.03; sound.reset(); useGame.getState().restart(); blurAction(); capturePointer(); };
   const exit = () => { useGame.getState().setPhase("loading"); clearInput(); document.exitPointerLock?.(); sound.stop(); };
   return <main id="main" className={`experience phase-${phase}`}>
     <div className="world" onPointerDown={e => { if (e.pointerType === "mouse" && phase === "playing") input.dragging = true; }} onPointerCancel={() => { input.dragging = false; }}>
@@ -87,9 +87,9 @@ export default function Experience() {
     {phase !== "playing" && <section className="overlay" aria-label={phase === "complete" ? "Journey complete" : "Living Matter"}>
       <div className="menu">
         <p className="menu-name">Living Matter</p>
-        <h1>{phase === "loading" ? "Loading…" : phase === "paused" ? "Paused" : phase === "complete" ? "Journey complete" : phase === "error" ? "The world couldn’t open." : "Ready to explore"}</h1>
-        {phase === "loading" ? <p role="status">Loading…</p> : phase === "error" ? <><p>Try a browser with WebGL 2 enabled.</p><button ref={action} className="primary" onClick={() => location.reload()}>Try again</button></> : <>
-          <button ref={action} className="primary" onClick={phase === "complete" ? restart : begin}>{phase === "complete" ? "Play again" : phase === "paused" ? "Resume" : "Play"}</button>
+        <h1 ref={menuHeading} tabIndex={-1}>{phase === "loading" ? "Loading…" : phase === "paused" ? "Paused" : phase === "complete" ? "Journey complete" : phase === "error" ? "The world couldn’t open." : "Ready to explore"}</h1>
+        {phase === "loading" ? <p role="status">Loading…</p> : phase === "error" ? <><p>Try a browser with WebGL 2 enabled.</p><button className="primary" onClick={() => location.reload()}>Try again</button></> : <>
+          <button className="primary" onClick={phase === "complete" ? restart : begin}>{phase === "complete" ? "Play again" : phase === "paused" ? "Resume" : "Play"}</button>
           {phase === "paused" && <button onClick={restart}>Restart</button>}
           <div className="settings">
             <button aria-pressed={!muted} onClick={() => useGame.getState().toggleMute()}>Sound {muted ? "off" : "on"}</button>
@@ -106,18 +106,17 @@ export default function Experience() {
     </section>}
     {phase === "playing" && <>
       <button className="pause" aria-label="Pause" onClick={pause}>Pause</button>
-      {hint && <div className="hint"><ControlGuide compact /></div>}
-      <TouchControls onUse={() => setHint(false)} />
+      <TouchControls />
     </>}
     <noscript><p className="noscript">Playing needs JavaScript and WebGL 2. <a href="/">Back to home</a></p></noscript>
   </main>;
 }
 
-function TouchControls({ onUse }: { onUse: () => void }) {
+function TouchControls() {
   const origin = useRef<[number, number] | null>(null), look = useRef<[number, number] | null>(null);
   const clearMove = () => { origin.current = null; input.forward = input.right = 0; };
   return <div className="touch-controls">
-    <div className="touch-move" aria-label="Movement joystick" onPointerDown={e => { e.currentTarget.setPointerCapture(e.pointerId); origin.current = [e.clientX, e.clientY]; onUse(); }} onPointerMove={e => {
+    <div className="touch-move" aria-label="Movement joystick" onPointerDown={e => { e.currentTarget.setPointerCapture(e.pointerId); origin.current = [e.clientX, e.clientY]; }} onPointerMove={e => {
       if (!origin.current) return; input.right = Math.max(-1, Math.min(1, (e.clientX - origin.current[0]) / 45)); input.forward = Math.max(-1, Math.min(1, (origin.current[1] - e.clientY) / 45));
     }} onPointerUp={clearMove} onPointerCancel={clearMove} onLostPointerCapture={clearMove}><span /></div>
     <div className="touch-look" aria-label="Look around" onPointerDown={e => { e.currentTarget.setPointerCapture(e.pointerId); look.current = [e.clientX, e.clientY]; }} onPointerMove={e => {

@@ -67,10 +67,17 @@ export class ScenarioDecisions implements DecisionSource {
         ["walkable ground", "living matter"].includes(semantic.player_now.facing_into ?? "") &&
       !semantic.player_now.motion.includes("behind"))
       return { candidateId: null, hold: true };
-    if (semantic?.matter_now.player_supported_by_matter &&
-      semantic.player_now.position_on_support !== "at an edge" &&
-      ["living matter", "walkable ground"].includes(semantic.player_now.facing_into ?? ""))
-      return { candidateId: null, hold: true };
+    if (semantic?.matter_now.player_supported_by_matter) {
+      const now = semantic.player_now;
+      const continuing = now.motion === "standing" || ["walking forward", "running forward"].includes(now.motion);
+      // A usable next half is a commitment, including at the occupied half's tip.
+      // Glancing up/down or a few degrees aside must not pull it out from under
+      // the approaching player. Sideways/backward motion and a deliberate turn
+      // toward open space can still ask for a different contribution.
+      if (continuing && (["living matter", "walkable ground"].includes(now.facing_into ?? "") ||
+        semantic.matter_now.reusable_section_relative_to_player === "ahead"))
+        return { candidateId: null, hold: true };
+    }
     if (!latest || !candidates.some((c) => c.physical))
       return { candidateId: candidates[0]?.id ?? null };
     let best: Candidate | null = null,

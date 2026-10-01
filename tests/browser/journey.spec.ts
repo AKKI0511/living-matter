@@ -62,6 +62,12 @@ test("each crossing can form before arrival completes and restarts", async ({
   ).toBeVisible();
   const finished = await snapshot(page);
   expect(finished.phase).toBe("complete");
+  await expect(page.getByRole("heading", { name: "Journey complete", exact: true })).toBeFocused();
+  await page.keyboard.press("Space");
+  await page.keyboard.press("Enter");
+  await page.keyboard.press("w");
+  expect((await snapshot(page)).phase).toBe("complete");
+  expect((await snapshot(page)).time).toBe(finished.time);
   await page.screenshot({ path: info.outputPath("complete.png") });
   await page.getByRole("button", { name: /^Play again$/ }).click();
   await expect.poll(async () => (await snapshot(page)).time).toBeLessThan(2);
