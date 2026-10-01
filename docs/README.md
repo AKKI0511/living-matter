@@ -1,6 +1,6 @@
 # Living Matter docs
 
-Living Matter puts Jev intelligence inside a playable world. Your movement becomes evidence of intent; the companion turns that intent into paths you can use.
+Living Matter is a world that understands your intent and adapts around you. Real-time Jev intelligence brings it to life through your movement, gaze and action.
 
 Start with [the game and local setup](../README.md), or go straight to the [Jev walkthrough](jev.md).
 

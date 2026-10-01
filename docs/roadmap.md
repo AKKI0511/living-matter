@@ -4,7 +4,7 @@
 
 ## V1 · Explore with living matter
 
-A playable movement companion powered by Jev. Explore the flooded observatory while matter reads your movement and rebuilds the paths around you.
+Explore a flooded observatory that responds to your intent. Real-time Jev intelligence brings living matter to life, adapting the world around you as you move.
 
 ## V2 · Plan a heist together
 

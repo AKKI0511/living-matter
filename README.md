@@ -1,12 +1,12 @@
 # Living Matter
 
-A Jev-powered companion that understands your movement and reshapes your path in real time.
+A world that understands your intent and adapts around you. Powered by real-time Jev intelligence.
 
 [Play](https://livingmatter.vercel.app) · [How Jev works](docs/jev.md) · [Architecture](docs/architecture.md)
 
 ![Living matter weaving a rising path through the flooded observatory at night](public/images/living-matter-arrival-night.webp)
 
-Sprint toward open water. Turn halfway across a path. Look toward a higher terrace. **Jev reads your movement, gaze and recent actions to infer where you want to go**, and living matter assembles a way forward. Change your mind and the companion adapts.
+Sprint toward open water. Change direction mid-stride. Look toward a higher terrace. **Jev understands your intent through movement, gaze and action**, bringing the world around you to life. Change your mind and the world responds.
 
 Explore a flooded observatory with one body of 512 pieces. Bridges, rising paths and moving platforms carry you between limestone islands toward a circular monument. Two reusable halves let the companion keep rebuilding while the section beneath you stays in place.
 
