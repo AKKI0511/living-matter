@@ -28,7 +28,7 @@ export const useGame = create<GameState>((set) => ({
   slow: false,
   providerUnavailable: false,
   reducedMotion: false,
-  night: false,
+  night: true,
   toggleNight: () => set((s) => { save("night", !s.night); return { night: !s.night }; }),
   setPhase: (phase) => set({ phase }),
   restart: () => set((s) => ({ run: s.run + 1, phase: "playing" })),

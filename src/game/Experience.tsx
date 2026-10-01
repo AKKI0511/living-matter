@@ -5,7 +5,7 @@ import { Component, useEffect, useRef, useState, type ReactNode } from "react";
 import { useGame, restorePreferences } from "./store";
 import { clearInput, input } from "./input";
 import { sound } from "./audio";
-import Theme from "@/app/Theme";
+import ControlGuide from "@/app/ControlGuide";
 import type { Quality } from "./quality";
 
 const Scene = dynamic(() => import("./Scene"), { ssr: false });
@@ -22,7 +22,7 @@ function pause() { useGame.getState().setPhase("paused"); document.exitPointerLo
 
 export default function Experience() {
   const { phase, muted, quality, night, run, slow, providerUnavailable } = useGame();
-  const [mounted, setMounted] = useState(false), [hint, setHint] = useState(true), [locked, setLocked] = useState(false);
+  const [mounted, setMounted] = useState(false), [hint, setHint] = useState(true);
   const action = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     restorePreferences(); clearInput(); input.yaw = 0; input.pitch = -0.03;
@@ -50,7 +50,7 @@ export default function Experience() {
     };
     let hadLock = false;
     const changed = () => {
-      const now = !!document.pointerLockElement; setLocked(now);
+      const now = !!document.pointerLockElement;
       if (hadLock && !now && useGame.getState().phase === "playing") pause();
       hadLock = now;
     };
@@ -84,7 +84,6 @@ export default function Experience() {
     <div className="world" onPointerDown={e => { if (e.pointerType === "mouse" && phase === "playing") input.dragging = true; }} onPointerCancel={() => { input.dragging = false; }}>
       {mounted && <SceneBoundary><Scene /></SceneBoundary>}
     </div>
-    <button className="time-toggle" aria-label={night ? "Switch to day" : "Switch to night"} onClick={e => { useGame.getState().toggleNight(); e.currentTarget.blur(); }}>{night ? "Day" : "Night"}</button>
     {phase !== "playing" && <section className="overlay" aria-label={phase === "complete" ? "Journey complete" : "Living Matter"}>
       <div className="menu">
         <p className="menu-name">Living Matter</p>
@@ -95,11 +94,11 @@ export default function Experience() {
           <div className="settings">
             <button aria-pressed={!muted} onClick={() => useGame.getState().toggleMute()}>Sound {muted ? "off" : "on"}</button>
             <label>Graphics <select aria-label="Graphics" value={quality} onChange={e => useGame.getState().setQuality(e.target.value as Quality)}><option value="auto">Auto</option><option value="low">Low</option><option value="high">High</option></select></label>
-            <Theme />
+            <button aria-label={night ? "Switch to day" : "Switch to night"} aria-pressed={night} onClick={() => useGame.getState().toggleNight()}>{night ? "☾ Night" : "☀ Day"}</button>
           </div>
           {slow && quality === "high" && <p className="performance-note">High is running slowly. <button onClick={() => useGame.getState().setQuality("auto")}>Use Auto</button></p>}
-          <details className="controls"><summary>How to play</summary><p>WASD / arrows to move · mouse or drag to look · Space to jump · Shift to run · Escape to pause · T for day / night.</p><p>Touch: left thumb to move, right thumb to look. Tap Jump to jump.</p></details>
-          <p className="backend-note">{process.env.NEXT_PUBLIC_DECISION_BACKEND === "jev" ? "Live Jev" : "Deterministic preview"}</p>
+          <ControlGuide compact />
+          <p className="backend-note">{process.env.NEXT_PUBLIC_DECISION_BACKEND === "jev" ? "Live Jev intelligence" : "Preview"}</p>
           {providerUnavailable && <p role="status">Jev is unavailable. Existing support is held. Try resuming shortly.</p>}
         </>}
         <Link href="/" onClick={exit}>Back to home</Link>
@@ -107,7 +106,7 @@ export default function Experience() {
     </section>}
     {phase === "playing" && <>
       <button className="pause" aria-label="Pause" onClick={pause}>Pause</button>
-      {hint && <p className="hint"><span className="desktop">WASD to move · {locked ? "mouse" : "drag"} to look · Space to jump · Escape to pause</span><span className="touch-copy">Left thumb to move · right thumb to look</span></p>}
+      {hint && <div className="hint"><ControlGuide compact /></div>}
       <TouchControls onUse={() => setHint(false)} />
     </>}
     <noscript><p className="noscript">Playing needs JavaScript and WebGL 2. <a href="/">Back to home</a></p></noscript>
@@ -124,6 +123,6 @@ function TouchControls({ onUse }: { onUse: () => void }) {
     <div className="touch-look" aria-label="Look around" onPointerDown={e => { e.currentTarget.setPointerCapture(e.pointerId); look.current = [e.clientX, e.clientY]; }} onPointerMove={e => {
       if (!look.current) return; input.yaw -= (e.clientX - look.current[0]) * 0.004; input.pitch = Math.max(-1.3, Math.min(1.3, input.pitch - (e.clientY - look.current[1]) * 0.004)); look.current = [e.clientX, e.clientY];
     }} onPointerUp={() => { look.current = null; }} onPointerCancel={() => { look.current = null; }} />
-    <button className="touch-jump" aria-label="Jump" onPointerDown={e => { e.currentTarget.setPointerCapture(e.pointerId); input.jump = input.jumpQueued = true; }} onPointerUp={() => { input.jump = false; }} onPointerCancel={() => { input.jump = false; }}>Jump</button>
+    <button className="touch-jump" aria-label="Jump" onPointerDown={e => { e.currentTarget.setPointerCapture(e.pointerId); input.jump = input.jumpQueued = true; }} onPointerUp={() => { input.jump = false; }} onPointerCancel={() => { input.jump = false; }}>↑</button>
   </div>;
 }

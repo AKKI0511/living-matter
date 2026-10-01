@@ -26,8 +26,8 @@ import {
   formationPose,
   platformOffset,
   sites,
-  smooth,
 } from "./world";
+import { assemblyProgress, angleBlend } from "./assembly";
 import { formMatter, semanticSnapshot, currentObservation, decisionObservations, type Runtime } from "./runtime";
 import { availableCandidates, onPermanentGround } from "./affordances";
 import { sound } from "./audio";
@@ -39,7 +39,6 @@ import {
   applySteeringCandidate,
   bankGeometry,
   bankProgress,
-  weaveBlend,
   weaveCandidates,
   weavePose,
   WEAVE_SECONDS,
@@ -47,6 +46,7 @@ import {
 } from "./weave";
 
 export function Matter({ runtime }: { runtime: Runtime }) {
+  const night = useGame(s => s.night);
   const mesh = useRef<InstancedMesh>(null),
     body = useRef<RapierRigidBody>(null);
   const colliders = useRef<(RapierCollider | null)[]>([]);
@@ -71,6 +71,8 @@ export function Matter({ runtime }: { runtime: Runtime }) {
   const geometry = useMemo(() => new RoundedBoxGeometry(1, 1, 1, 1, 0.045), []);
   const live = useMemo(() => new Float32Array(MATTER_COUNT * 6), []);
   const origin = useMemo(() => new Float32Array(MATTER_COUNT * 6), []);
+  const rotation = useMemo(() => new Float32Array(MATTER_COUNT * 3), []);
+  const originRotation = useMemo(() => new Float32Array(MATTER_COUNT * 3), []);
   const boxes = useMemo(
     () =>
       sites.flatMap((site, index) =>
@@ -208,6 +210,7 @@ export function Matter({ runtime }: { runtime: Runtime }) {
       state = index === null ? null : runtime.states[index];
     if (runtime.revision !== seenRevision.current) {
       origin.set(live);
+      originRotation.set(rotation);
       seenRevision.current = runtime.revision;
       transitionStart.current = runtime.time;
       bankVersions.current = [-1, -1];
@@ -243,16 +246,12 @@ export function Matter({ runtime }: { runtime: Runtime }) {
           live.subarray(bankIndex * 256 * 6, (bankIndex + 1) * 256 * 6),
           bankIndex * 256 * 6,
         );
+        originRotation.set(rotation.subarray(bankIndex * 256 * 3, (bankIndex + 1) * 256 * 3), bankIndex * 256 * 3);
         bankVersions.current[bankIndex] = bank.version;
       }
-      const progress =
-        bank && bank.version > 0
-          ? weaveBlend(runtime.time, bank.since)
-          : smooth((elapsed - ((i % 32) / 32) * 0.35) / (duration - 0.4));
-      // Leave a visible assembly gap until the corresponding physics step has
-      // enabled support. Occupied, unchanged banks always retain their full pose.
-      const waitingForSupport = state && (state.phase !== "active" || (bank && runtime.time - bank.since < WEAVE_SECONDS));
-      const t = waitingForSupport ? Math.min(0.965, progress) : progress;
+      const recycled = !!bank && bank.version > 0;
+      const ready = !state || (state.phase === "active" && (!bank || runtime.solidColliderHandles.has(weaveColliders.current[bankIndex]?.handle ?? -1)));
+      const t = assemblyProgress(recycled ? runtime.time - bank.since : elapsed, recycled ? WEAVE_SECONDS : duration, i, ready);
       const pose = bank
         ? bankPoses.current[bankIndex]!.poses[i % 256]
         : state
@@ -281,16 +280,11 @@ export function Matter({ runtime }: { runtime: Runtime }) {
       live[j + 1] += arc * (2.5 + (i % 8) * 0.12);
       dummy.position.set(live[j], live[j + 1], live[j + 2]);
       dummy.scale.set(live[j + 3], live[j + 4], live[j + 5]);
-      dummy.rotation.set(
-        arc * Math.sin(i) * 0.45,
-        arc * 0.8 +
-          (bank
-            ? bankPoses.current[bankIndex]!.yaw * t
-            : !state
-              ? Math.sin(runtime.time * 0.5 + i / 64) * 0.06
-              : (pose?.yaw ?? 0) * t),
-        arc * Math.cos(i) * 0.3,
-      );
+      const r = i * 3;
+      rotation[r] = originRotation[r] * (1 - t) + arc * Math.sin(i) * 0.45;
+      rotation[r + 1] = angleBlend(originRotation[r + 1], bank ? bankPoses.current[bankIndex]!.yaw : !state ? Math.sin(runtime.time * 0.5 + i / 64) * 0.06 : pose?.yaw ?? 0, t) + arc * 0.8;
+      rotation[r + 2] = originRotation[r + 2] * (1 - t) + arc * Math.cos(i) * 0.3;
+      dummy.rotation.set(rotation[r], rotation[r + 1], rotation[r + 2]);
       dummy.updateMatrix();
       mesh.current.setMatrixAt(i, dummy.matrix);
     }
@@ -541,7 +535,7 @@ export function Matter({ runtime }: { runtime: Runtime }) {
           metalness={0.48}
           roughness={0.36}
           emissive="#b29b68"
-          emissiveIntensity={0.025}
+          emissiveIntensity={night ? 0.18 : 0.025}
         />
       </instancedMesh>
       <RigidBody ref={body} type="kinematicPosition" colliders={false}>

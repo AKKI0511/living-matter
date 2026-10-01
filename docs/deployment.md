@@ -7,3 +7,5 @@ Live production needs `UPSTASH_REDIS_REST_URL` and server-only `UPSTASH_REDIS_RE
 The endpoint accepts bounded physical state, checks same origin in production, limits the streamed body to 24 KB and three seconds, gives Jev 1.6 seconds and makes no SDK retries. Browser decisions have a two-second gate. Home, loading, pause and disposed runs do not schedule inference. Production auditing is disabled and requires no writable directories.
 
 Create a preview with the production configuration, verify public routes and real backend operation, then promote that exact deployment. Keep `.env*`, audits and recordings outside Git and deployment uploads. Check the GitHub repository link and Node 24 project setting explicitly. Platform DDoS protection supplements the application limits; it does not replace the shared budget.
+
+Vercel builds mount Web Analytics and Speed Insights in the root layout. The linked project remains on Hobby and uses capped free collection; do not enable Speed Insights Plus or upgrade the plan. Local development and browser tests do not send telemetry. See [free Speed Insights limits](https://vercel.com/docs/speed-insights/limits-and-pricing).

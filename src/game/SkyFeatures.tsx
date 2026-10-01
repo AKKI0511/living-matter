@@ -1,16 +1,30 @@
 "use client";
 import { useEffect, useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
-import { AdditiveBlending, BufferAttribute, BufferGeometry, type Group } from "three";
+import { AdditiveBlending, BufferAttribute, BufferGeometry, Color, ShaderMaterial, type Group } from "three";
 import { useGame } from "./store";
 
 /** Real sphere silhouettes in a stable sky position, with normal depth occlusion. */
 export function Moon() {
   const group=useRef<Group>(null), night=useGame(s=>s.night);
+  const material=useMemo(() => new ShaderMaterial({
+    uniforms: { body: { value: new Color() }, rim: { value: new Color() } },
+    vertexShader: "varying vec3 vNormal;varying vec3 vView;void main(){vec4 p=modelViewMatrix*vec4(position,1.);vNormal=normalize(normalMatrix*normal);vView=-p.xyz;gl_Position=projectionMatrix*p;}",
+    fragmentShader: `varying vec3 vNormal;varying vec3 vView;uniform vec3 body;uniform vec3 rim;
+      void main(){float edge=1.-max(dot(normalize(vNormal),normalize(vView)),0.);
+      gl_FragColor=vec4(mix(body,rim,smoothstep(.87,1.,edge)*.65),1.);
+      #include <tonemapping_fragment>
+      #include <colorspace_fragment>
+      }`,
+  }),[]);
+  useEffect(() => {
+    material.uniforms.body.value.set(night?"#0b192b":"#5a777d");
+    material.uniforms.rim.value.set(night?"#45637b":"#a3b3aa");
+  },[material,night]);
+  useEffect(() => () => material.dispose(),[material]);
   useFrame(({camera}) => { group.current?.position.set(camera.position.x-155,camera.position.y+160,camera.position.z-470); });
   return <group ref={group}>
-    <mesh><sphereGeometry args={[23.5,48,32]} /><meshBasicMaterial color={night?"#45637b":"#a3b3aa"} /></mesh>
-    <mesh position={[1.5,.5,1.9]}><sphereGeometry args={[23.1,48,32]} /><meshBasicMaterial color={night?"#0b192b":"#5a777d"} /></mesh>
+    <mesh material={material}><sphereGeometry args={[23.5,64,48]} /></mesh>
   </group>;
 }
 

@@ -4,7 +4,6 @@
 @font-face { font-family: "Atkinson Hyperlegible Mono"; font-style: normal; font-weight: 400; font-display: optional; src: url("/fonts/atkinson-mono-400.woff2") format("woff2"); }
 
 :root { color-scheme: dark; --bg: #0f0e0d; --raised: #171716; --line: #3d3d3c; --text: #eae9e6; --secondary: #b5b4b2; --muted: #8d8c8a; --glass: rgb(23 23 22 / .88); }
-:root[data-theme="light"] { color-scheme: light; --bg: #eeede8; --raised: #e3e2dd; --line: #9b9a94; --text: #242321; --secondary: #55544e; --muted: #64635d; --glass: rgb(238 237 232 / .94); }
 * { box-sizing: border-box; }
 html, body { margin: 0; min-height: 100%; background: var(--bg); color: var(--text); }
 body, button, select { font: 400 17px/1.6 "Atkinson Hyperlegible Next", sans-serif; }
@@ -19,8 +18,7 @@ button:disabled { cursor: wait; }
 .skip:focus { transform: none; }
 .home { width: min(1200px, calc(100% - 64px)); margin: auto; }
 .home-top { display: flex; justify-content: space-between; align-items: center; padding-top: 24px; font-size: 15px; }
-.theme-toggle { border: 0; padding: 8px 12px; }
-.home-intro { padding: 64px 0 40px; max-width: 680px; }
+.home-intro { padding: 44px 0 24px; max-width: 680px; }
 h1 { font-weight: 500; letter-spacing: -.035em; text-wrap: balance; margin: 0 0 18px; line-height: 1.08; }
 .home h1 { font-size: clamp(48px, 7vw, 84px); }
 .home-intro p { font-size: 21px; line-height: 1.5; max-width: 540px; color: var(--secondary); text-wrap: pretty; margin: 0 0 28px; }
@@ -28,18 +26,22 @@ h1 { font-weight: 500; letter-spacing: -.035em; text-wrap: balance; margin: 0 0 
 .home nav a { min-height: 44px; display: inline-flex; align-items: center; }
 .poster { margin: 0; background: var(--raised); aspect-ratio: 16/9; overflow: hidden; }
 .poster img { width: 100%; height: auto; display: block; }
-.how { max-width: 640px; margin: 24px 0; }
-summary { min-height: 44px; padding: 8px 0; cursor: pointer; list-style: none; }
-summary::before { content: "+"; font-family: "Atkinson Hyperlegible Mono", monospace; padding-right: 12px; color: var(--muted); }
-details[open] > summary::before { content: "−"; }
-details p { color: var(--secondary); margin: 8px 0 20px; }
+.control-guide { padding: 20px 0 28px; margin: 0 0 28px; border-top: 1px solid var(--line); }
+.control-guide h2 { font-size: 18px; font-weight: 500; margin: 0 0 20px; }
+.keyboard-guide { display: flex; gap: clamp(12px, 4vw, 64px); align-items: center; justify-content: space-between; max-width: 900px; }
+.keyboard-guide > svg { width: clamp(76px, 10vw, 120px); height: auto; flex: 0 1 120px; }
+.finger-guide { display: none; }
+.compact.control-guide { margin: 20px 0 12px; padding: 18px 0 0; }
+.compact .keyboard-guide { gap: 6px; }
+.compact .keyboard-guide > svg { width: 64px; }
+.compact h2 { font-size: 15px; margin-bottom: 14px; }
 .home footer { display: flex; align-items: center; gap: 8px; padding: 20px 0 32px; font: 13px/1.6 "Atkinson Hyperlegible Mono", monospace; color: var(--muted); }
-.home footer > a:last-child { margin-left: auto; padding: 12px 0; }
+.home footer > span:last-child { margin-left: auto; padding: 12px 0; }
 .experience { position: fixed; inset: 0; overflow: hidden; background: #102d37; }
 .world { position: absolute; inset: 0; touch-action: none; }
 .world canvas { display: block; }
 .overlay { position: absolute; inset: 0; display: grid; place-items: center; padding: 70px 24px; background: rgb(0 0 0 / .32); overflow-y: auto; }
-.menu { width: min(480px, 100%); padding: 32px; background: var(--glass); border: 1px solid rgb(255 255 255 / .09); border-radius: 20px; backdrop-filter: blur(18px) saturate(1.1); }
+.menu { width: min(560px, 100%); padding: 32px; background: var(--glass); border: 1px solid rgb(255 255 255 / .09); border-radius: 20px; backdrop-filter: blur(18px) saturate(1.1); }
 .menu h1 { font-size: clamp(30px, 5vw, 42px); }
 .menu-name { font-size: 14px; color: var(--secondary); margin: 0 0 20px; }
 .menu > button { margin-right: 12px; margin-bottom: 16px; }
@@ -48,16 +50,17 @@ details p { color: var(--secondary); margin: 8px 0 20px; }
 .settings button { padding: 8px 12px; }
 .settings label { display: inline-flex; align-items: center; gap: 10px; }
 .settings select { padding: 8px 10px; }
-.controls { margin-top: 16px; font-size: 15px; }
 .backend-note { font: 12px/1.6 "Atkinson Hyperlegible Mono", monospace; color: var(--muted); margin: 16px 0 4px; }
 .performance-note { font-size: 15px; }
-.time-toggle, .pause { position: absolute; z-index: 3; top: max(20px, env(safe-area-inset-top)); border: 1px solid rgb(255 255 255 / .16); color: #eae9e6; background: rgb(23 23 22 / .68); backdrop-filter: blur(18px); font-size: 15px; }
-.time-toggle { left: 24px; }
-.pause { right: 24px; }
-.hint { position: absolute; bottom: max(24px, env(safe-area-inset-bottom)); left: 24px; right: 24px; margin: 0; text-align: center; color: #eae9e6; text-shadow: 0 1px 6px #000; font-size: 15px; pointer-events: none; }
+.pause { display: none; position: absolute; z-index: 3; top: max(20px, env(safe-area-inset-top)); right: 24px; border: 1px solid rgb(255 255 255 / .16); color: #eae9e6; background: rgb(23 23 22 / .68); backdrop-filter: blur(18px); font-size: 15px; }
+.hint { position: absolute; bottom: max(24px, env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); width: min(420px, 90%); margin: 0; color: #eae9e6; pointer-events: none; }
+.hint .control-guide { border: none; margin: 0; padding: 0; filter: drop-shadow(0 1px 3px #000); }
+.hint h2 { display: none; }
+.hint .keyboard-guide > svg { width: 48px; }
 .touch-controls, .touch-copy { display: none; }
 .noscript { position: fixed; inset: 0; background: var(--bg); display: grid; place-items: center; }
-@media (max-width: 760px) { .home { width: calc(100% - 40px); } .home-intro { padding: 48px 0 32px; } .home-intro p { font-size: 19px; } .poster { margin: 0 -20px; } .menu { padding: 24px; } }
+@media (max-width: 760px) { .home { width: calc(100% - 40px); } .home-intro { padding: 32px 0 24px; } .home-intro p { font-size: 19px; } .poster { margin: 0 -20px; } .menu { padding: 24px; } .keyboard-guide { gap: 6px; } .keyboard-guide > svg { min-width: 0; width: 18%; } .home footer { flex-wrap: wrap; font-size: 11px; } }
+@media (any-pointer: coarse) { .pause { display: block; } }
 @media (pointer: coarse) {
  .desktop { display: none; } .touch-copy { display: inline; }
  .touch-controls { display: block; position: absolute; inset: 80px 0 0; pointer-events: none; }
@@ -65,6 +68,8 @@ details p { color: var(--secondary); margin: 8px 0 20px; }
  .touch-move span { width: 36px; height: 36px; border: 1px solid rgb(255 255 255 / .4); border-radius: 50%; }
  .touch-look { position: absolute; top: 0; right: 0; bottom: 145px; width: 50%; touch-action: none; pointer-events: auto; }
  .touch-jump { position: absolute; right: 24px; bottom: max(48px, env(safe-area-inset-bottom)); color: #eae9e6; border-color: rgb(255 255 255 / .3); background: rgb(23 23 22 / .5); touch-action: none; pointer-events: auto; min-width: 70px; min-height: 70px; }
- .hint { bottom: 165px; } .time-toggle { left: 16px; } .pause { right: 16px; }
+ .hint { bottom: 165px; width: 120px; } .pause { right: 16px; }
+ .keyboard-guide { display: none; } .finger-guide { display: block; max-width: 320px; } .finger-guide > svg { width: 100%; height: auto; }
+ .compact .finger-guide { max-width: 190px; margin: auto; }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; scroll-behavior: auto !important; } }

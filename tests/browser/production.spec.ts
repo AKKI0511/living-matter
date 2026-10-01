@@ -47,7 +47,7 @@ test("production preview crosses a shore without game debug hooks or external se
     }
   });
   await page.goto("/play");
-  await expect(page.getByText(/Deterministic preview/)).toBeVisible();
+  await expect(page.getByText("Preview", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: /^Play$/ }).click();
   expect(await page.evaluate(() => window.__livingMatter)).toBeUndefined();
   const camera = () => page.evaluate(() => (window as unknown as { __renderedCamera?: { x: number; y: number; z: number; yaw: number; pitch: number } }).__renderedCamera);
@@ -155,7 +155,8 @@ test("production preview crosses a shore without game debug hooks or external se
     }
     expect(crossed).toBe(true);
   await page.keyboard.press("t");
-  await expect(page.getByRole("button", { name: "Switch to day" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("button", { name: "Switch to night" })).toBeVisible();
   await page.screenshot({ path: info.outputPath("crossing.png") });
   await page.reload();
   await expect(page.getByRole("button", { name: /^Play$/ })).toBeVisible();

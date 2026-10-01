@@ -69,7 +69,6 @@ test("night sky and controls stay legible", async ({ page }, info) => {
   await begin(page);
   await go(page, [0, 0, -12]);
   await page.keyboard.press("Escape");
-  await page.getByRole("button", { name: "Switch to night" }).click();
   await expect(page.getByRole("button", { name: "Switch to day" })).toBeVisible();
   await page.getByRole("button", { name: /^Resume$/ }).click();
   await page.evaluate(() => window.__livingMatter!.look(0.15, 0.55));
@@ -77,6 +76,7 @@ test("night sky and controls stay legible", async ({ page }, info) => {
   await page.screenshot({ path: info.outputPath("memory-sky.png") });
   expect(await page.locator(".pause").evaluate(e => parseFloat(getComputedStyle(e).fontSize))).toBeGreaterThanOrEqual(15);
   await page.keyboard.press("t");
+  await page.keyboard.press("Escape");
   await expect(page.getByRole("button", { name: "Switch to night" })).toBeVisible();
 });
 
