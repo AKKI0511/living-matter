@@ -21,7 +21,7 @@ Open [localhost:3000](http://localhost:3000) and select Play.
 
 WASD / arrows move. Mouse / drag looks. Space jumps. Shift runs. Escape pauses. T switches Day / Night. Touch uses a left movement stick, right look area and Jump button.
 
-The menu offers Resume, Restart, Back to home, Sound, Day / Night and Auto / Low / High graphics. The interface stays dark, and the world starts at night. Controls appear only in the game menu; Escape pauses desktop play, and touch devices have a Pause button. Pause and completion focus the heading, so an accidental jump key cannot resume or restart. Preferences are saved locally.
+The menu offers Resume, Restart, Back to home, Sound, Day / Night and Auto / Low / High graphics. The interface stays dark, and the world starts at night. Controls appear only in the game menu; Escape pauses desktop play, and touch devices have a Pause button. Pause and completion leave the menu unfocused, so an accidental jump key cannot resume or restart. Tab still reaches the controls. Preferences are saved locally.
 
 ## Decision modes
 

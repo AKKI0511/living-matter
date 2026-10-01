@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { Environment, Lightformer } from "@react-three/drei";
 import { CuboidCollider, RigidBody } from "@react-three/rapier";
-import { BackSide, BufferAttribute, BufferGeometry, Color, DirectionalLight, InstancedMesh, MeshStandardMaterial, Object3D, ShaderMaterial } from "three";
+import { BackSide, BufferAttribute, BufferGeometry, Color, DirectionalLight, InstancedMesh, MeshStandardMaterial, Object3D, ShaderMaterial, Vector3 } from "three";
 import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
 import { walkableGround, islands, WATER_LEVEL, architectureBoxes, columns, distantFragments, MONUMENT, type StructureBox, type Vec3 } from "./world";
 import { useGame } from "./store";
@@ -11,10 +11,17 @@ import { QUALITY } from "./quality";
 import { Moon, NightStars } from "./SkyFeatures";
 
 const stoneShader: MeshStandardMaterial["onBeforeCompile"] = shader => {
-  shader.vertexShader = "varying vec3 vStonePosition;\n" + shader.vertexShader.replace("#include <worldpos_vertex>", "#include <worldpos_vertex>\nvStonePosition=(modelMatrix*vec4(transformed,1.)).xyz;");
+  shader.vertexShader = "varying vec3 vStonePosition;\n" + shader.vertexShader.replace("#include <worldpos_vertex>", `#include <worldpos_vertex>
+    vec4 stonePosition=vec4(transformed,1.);
+    #ifdef USE_INSTANCING
+      stonePosition=instanceMatrix*stonePosition;
+    #endif
+    vStonePosition=(modelMatrix*stonePosition).xyz;`);
   shader.fragmentShader = "varying vec3 vStonePosition;\n" + shader.fragmentShader.replace("#include <color_fragment>", `#include <color_fragment>
     float strata=sin(vStonePosition.y*2.8+sin(vStonePosition.x*.2)*.6)*.018;
-    float pores=sin(vStonePosition.x*26.)*sin(vStonePosition.z*24.)*.009;
+    vec2 footprint=fwidth(vStonePosition.xz)*vec2(26.,24.);
+    float pores=sin(vStonePosition.x*26.)*sin(vStonePosition.z*24.)*.009*
+      (1.-smoothstep(.5,2.,max(footprint.x,footprint.y)));
     diffuseColor.rgb*=.985+strata+pores;`);
 };
 
@@ -43,13 +50,23 @@ function Boxes({ boxes, material, shadows = true }: { boxes: readonly StructureB
 
 function Sunlight() {
   const light = useRef<DirectionalLight>(null), target = useMemo(() => new Object3D(), []);
+  const basis = useMemo(() => {
+    const direction = new Vector3(-32,62,-60).normalize();
+    const right = new Vector3(0,1,0).cross(direction).normalize();
+    return { right, up: direction.clone().cross(right).normalize(), center: new Vector3() };
+  }, []);
   const quality = useGame(s => s.renderQuality), night = useGame(s => s.night);
   useFrame(({ camera }) => {
     if (!light.current) return;
-    // Snap the shadow projection to texels to prevent crawling as the player moves.
-    const texel=76/2048, x=Math.round(camera.position.x/texel)*texel, z=Math.round(camera.position.z/texel)*texel;
-    target.position.set(x,6,z-16); target.updateMatrixWorld();
-    light.current.position.set(x-32,68,z-76);
+    // Shadow texels live in light space, not world X/Z. Snap both projected
+    // axes so the same surface keeps its shadow samples while the player moves.
+    const texel=76/QUALITY.high.shadowSize, {center,right,up}=basis;
+    center.set(camera.position.x,6,camera.position.z-16);
+    const x=center.dot(right), y=center.dot(up);
+    center.addScaledVector(right,Math.round(x/texel)*texel-x);
+    center.addScaledVector(up,Math.round(y/texel)*texel-y);
+    target.position.copy(center); target.updateMatrixWorld();
+    light.current.position.set(center.x-32,center.y+62,center.z-60);
   });
   return <><primitive object={target} /><directionalLight ref={light} target={target} intensity={night ? 1.1 : 3.1} color={night ? "#a9c9eb" : "#fff0d3"} castShadow={quality === "high"} shadow-mapSize={[2048,2048]} shadow-camera-left={-38} shadow-camera-right={38} shadow-camera-top={38} shadow-camera-bottom={-38} shadow-camera-near={1} shadow-camera-far={160} shadow-normalBias={0.035} shadow-bias={-0.00008} /></>;
 }

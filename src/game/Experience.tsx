@@ -23,7 +23,6 @@ function pause() { useGame.getState().setPhase("paused"); document.exitPointerLo
 export default function Experience() {
   const { phase, muted, quality, night, run, slow, providerUnavailable } = useGame();
   const [mounted, setMounted] = useState(false);
-  const menuHeading = useRef<HTMLHeadingElement>(null);
   useEffect(() => {
     restorePreferences(); clearInput(); input.yaw = 0; input.pitch = -0.03;
     useGame.setState({ phase: "loading", providerUnavailable: false, reducedMotion: matchMedia("(prefers-reduced-motion: reduce)").matches, run: useGame.getState().run + 1 });
@@ -73,8 +72,10 @@ export default function Experience() {
   }, []);
   useEffect(() => { sound.mute(muted); }, [muted]);
   useEffect(() => {
-    // Announce the menu without making a held jump key activate Resume/Play again.
-    if (phase !== "playing") menuHeading.current?.focus({ preventScroll: true });
+    // Clear the previous action without selecting anything in the new menu.
+    // A held jump/Enter cannot activate Resume or Play again; Tab still works.
+    if (phase !== "playing" && document.activeElement instanceof HTMLElement)
+      document.activeElement.blur();
   }, [phase, run]);
   const blurAction = () => { if (document.activeElement instanceof HTMLElement) document.activeElement.blur(); };
   const begin = () => { void sound.start().catch(() => {}); useGame.getState().setPhase("playing"); blurAction(); capturePointer(); };
@@ -87,7 +88,7 @@ export default function Experience() {
     {phase !== "playing" && <section className="overlay" aria-label={phase === "complete" ? "Journey complete" : "Living Matter"}>
       <div className="menu">
         <p className="menu-name">Living Matter</p>
-        <h1 ref={menuHeading} tabIndex={-1}>{phase === "loading" ? "Loading…" : phase === "paused" ? "Paused" : phase === "complete" ? "Journey complete" : phase === "error" ? "The world couldn’t open." : "Ready to explore"}</h1>
+        <h1 aria-live="polite">{phase === "loading" ? "Loading…" : phase === "paused" ? "Paused" : phase === "complete" ? "Journey complete" : phase === "error" ? "The world couldn’t open." : "Ready to explore"}</h1>
         {phase === "loading" ? <p role="status">Loading…</p> : phase === "error" ? <><p>Try a browser with WebGL 2 enabled.</p><button className="primary" onClick={() => location.reload()}>Try again</button></> : <>
           <button className="primary" onClick={phase === "complete" ? restart : begin}>{phase === "complete" ? "Play again" : phase === "paused" ? "Resume" : "Play"}</button>
           {phase === "paused" && <button onClick={restart}>Restart</button>}

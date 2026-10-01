@@ -31,14 +31,18 @@ test("home/play cycles, Back, pause, preferences and focus clean up the run", as
     await expect.poll(() => page.evaluate(() => (window.__livingMatter!.snapshot() as {player:number[]}).player[2])).toBeLessThan(-1);
     await page.keyboard.press("Escape");
     const frozen = await page.evaluate(() => window.__livingMatter!.snapshot());
-    await expect(page.getByRole("heading", { name: "Paused", exact: true })).toBeFocused();
+    await expect(page.locator(".menu :focus")).toHaveCount(0);
     await page.keyboard.press("Space");
     await page.keyboard.press("Enter");
     await expect(page.getByRole("heading", { name: "Paused", exact: true })).toBeVisible();
     await page.waitForTimeout(300);
     expect(await page.evaluate(() => (window.__livingMatter!.snapshot() as { time:number }).time)).toBe((frozen as {time:number}).time);
     await page.keyboard.up("w");
-    await page.keyboard.press("Tab");
+    // No menu focus is forced. Native Tab may visit the skip link first.
+    for (let tabs = 0; tabs < 3; tabs++) {
+      await page.keyboard.press("Tab");
+      if (await page.getByRole("button", { name: "Resume", exact: true }).evaluate(e => e === document.activeElement)) break;
+    }
     await expect(page.getByRole("button", { name: "Resume", exact: true })).toBeFocused();
     await page.keyboard.press("Enter");
     await page.keyboard.press("Escape");

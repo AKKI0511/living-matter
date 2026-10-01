@@ -8,5 +8,6 @@ test("presets bound the pixel budget at 1080p, 4K and high device DPR", () => {
     assert.ok(w*h*ratio**2 <= Math.max(QUALITY[q].pixels,w*h*.25)+1);
   }
   assert.ok(renderDpr("high",1920,1080,1)>renderDpr("low",1920,1080,1));
+  assert.ok(renderDpr("high",1440,900,1)>1, "High improves edges on a DPR-1 laptop");
   assert.deepEqual(frameSummary([40,16,17,15,16]), {median:16,p95:40});
 });

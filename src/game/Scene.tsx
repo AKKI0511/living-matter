@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ComponentRef } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Physics } from "@react-three/rapier";
 import {
@@ -7,7 +7,7 @@ import {
   N8AO,
   ToneMapping,
 } from "@react-three/postprocessing";
-import { ACESFilmicToneMapping } from "three";
+import { ACESFilmicToneMapping, Vector2, type WebGLRenderer } from "three";
 import { useGame } from "./store";
 import { Player } from "./Player";
 import { Matter } from "./Matter";
@@ -20,6 +20,9 @@ import { sites } from "./world";
 import { weaveRoute } from "./weave";
 import { frameSummary, renderDpr } from "./quality";
 
+type PipelineInfo = { buffer: number[]; aoBuffer: number[]; gammaCorrection: boolean };
+const pipelineInfo = new WeakMap<WebGLRenderer, () => PipelineInfo | null>();
+
 declare global {
   interface Window {
     __livingMatter?: {
@@ -29,6 +32,7 @@ declare global {
         textures: number;
         calls: number;
         triangles: number;
+        pipeline: PipelineInfo | null;
       };
       teleport: (p: Vec3) => void;
       formation: (site: number, kind: FormationKind, bend?: number, reverse?: boolean) => void;
@@ -94,6 +98,7 @@ function Simulation() {
           ...gl.info.memory,
           calls: gl.info.render.calls,
           triangles: gl.info.render.triangles,
+          pipeline: pipelineInfo.get(gl)?.() ?? null,
         }),
         teleport: (p) => {
           runtime.forcedPosition = p;
@@ -174,6 +179,42 @@ function ContextLifecycle() {
   return null;
 }
 
+function HighEffects() {
+  const gl = useThree(s => s.gl);
+  const composer = useRef<ComponentRef<typeof EffectComposer>>(null);
+  const ao = useRef<ComponentRef<typeof N8AO>>(null);
+  const buffer = useMemo(() => new Vector2(), []);
+  // The wrapper tracks CSS size, but DPR can change without a CSS resize.
+  // Synchronize once per actual buffer change, before the composer's render.
+  useFrame(() => {
+    const effect = composer.current;
+    if (!effect) return;
+    gl.getDrawingBufferSize(buffer);
+    if (effect.inputBuffer.width !== buffer.x || effect.inputBuffer.height !== buffer.y) {
+      gl.getSize(buffer);
+      effect.setSize(buffer.x, buffer.y);
+    }
+  });
+  useEffect(() => {
+    if (process.env.NODE_ENV !== "development") return;
+    pipelineInfo.set(gl, () => composer.current && ao.current ? {
+      buffer: [composer.current.inputBuffer.width, composer.current.inputBuffer.height],
+      aoBuffer: [ao.current.width, ao.current.height],
+      gammaCorrection: ao.current.configuration.gammaCorrection,
+    } : null);
+    return () => { pipelineInfo.delete(gl); };
+  }, [gl]);
+  return <EffectComposer ref={composer} multisampling={4}>
+    <N8AO ref={pass => {
+      ao.current = pass;
+      // N8AO 2's post pass defaults to sRGB output. Keep intermediate color
+      // linear; the final ACES/output pass performs the only display conversion.
+      if (pass) pass.configuration.gammaCorrection = false;
+    }} aoRadius={0.65} intensity={0.28} distanceFalloff={1} quality="performance" halfRes />
+    <ToneMapping mode={6} />
+  </EffectComposer>;
+}
+
 export default function Scene() {
   const run = useGame((s) => s.run),
     quality = useGame((s) => s.renderQuality);
@@ -200,19 +241,7 @@ export default function Scene() {
       <ContextLifecycle />
       <Atmosphere />
       <Simulation key={run} />
-      {quality === "high" && (
-        <EffectComposer multisampling={2}>
-          <N8AO
-            aoRadius={0.8}
-            intensity={0.32}
-            distanceFalloff={1}
-            quality="performance"
-            halfRes
-          />
-          {/* postprocessing ToneMappingMode.ACES_FILMIC matches the direct renderer. */}
-          <ToneMapping mode={6} />
-        </EffectComposer>
-      )}
+      {quality === "high" && <HighEffects />}
     </Canvas>
   );
 }
