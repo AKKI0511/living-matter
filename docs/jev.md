@@ -172,7 +172,7 @@ These are situations the policy evaluates, not a fixed mapping from gestures to 
 
 Movement and physics run at 60 Hz while observations are sampled at 5 Hz. Jev requests have a minimum 1.5-second application cooldown. Exact checks skip inference when continuous support already serves the current direction; unchanged decisions are cached. New behavior and options change the request signature. Jev interprets traversal intent while the engine keeps the world moving.
 
-Pause, restart and exit cancel pending selection, and late results are ignored. Provider failures preserve safe existing support and surface an unavailable status. Live mode never silently becomes Preview. Local Preview uses rules through the same selection interface and needs no provider.
+Pause, restart and exit cancel pending selection, and late results are ignored. Provider failures automatically use local Preview through the same selection interface and physical checks, while a brief dismissible notice appears during play. Cooldown probes restore Jev after recovery. Preview needs no provider, and occupied support stays protected throughout.
 
 Math, collision and piece accounting stay in code. Compact state and explicit criteria keep the model's job focused, consistent with TypeSafe's [Jev 1.13 guidance](https://docs.typesafe.ai/model-jaggedness/jev-1.13).
 

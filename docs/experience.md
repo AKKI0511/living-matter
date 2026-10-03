@@ -11,7 +11,7 @@ Explore five islands in a flooded observatory. Living matter follows your intent
 | Move | WASD or arrow keys | Left stick |
 | Look | Mouse or drag | Drag on the right |
 | Jump | Space | Jump button |
-| Sprint | Shift | Keyboard only |
+| Sprint | Shift | Push stick fully |
 | Pause | Escape | Pause button |
 
 Use the menu to resume, restart, return home, change sound, choose Auto / Low / High graphics, or switch Day / Night. **T** also switches Day / Night on desktop.
@@ -28,4 +28,6 @@ Falling returns you to safe ground. Reaching the monument offers Play again or B
 
 ## Preview and live Jev
 
-**Live Jev intelligence** interprets your behavior through the model. **Preview** chooses physical options with local rules and works without credentials. The menu identifies the active backend. Both use the same world, movement and matter engine; Jev unavailability keeps existing support and never silently switches the run to Preview.
+**Live Jev intelligence** interprets your behavior through the model. **Preview** chooses physical options with local rules and works without credentials. Both use the same world, movement and matter engine. If Jev is busy or unavailable, Preview keeps the journey playable. A small notice appears only during play and disappears after eight seconds; close it, or press H, to hide it for the rest of your visit. Live decisions return when the service recovers.
+
+On touchscreens, the left stick follows your finger: a short push walks, a full push sprints. Use the right side to look and ↑ to jump. Portrait and landscape both work. Supported phones request fullscreen when you tap Play; Exit fullscreen returns to the browser and pauses the run.

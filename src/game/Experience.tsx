@@ -7,6 +7,9 @@ import { clearInput, input } from "./input";
 import { sound } from "./audio";
 import ControlGuide from "@/app/ControlGuide";
 import type { Quality } from "./quality";
+import TouchControls from "./TouchControls";
+import PreviewNotice from "./PreviewNotice";
+import { useGameFullscreen } from "./use-game-fullscreen";
 
 const Scene = dynamic(() => import("./Scene"), { ssr: false });
 class SceneBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
@@ -21,7 +24,9 @@ function capturePointer() {
 function pause() { useGame.getState().setPhase("paused"); document.exitPointerLock?.(); }
 
 export default function Experience() {
-  const { phase, muted, quality, night, run, slow, providerUnavailable } = useGame();
+  const { phase, muted, quality, night, run, slow } = useGame();
+  const root = useRef<HTMLElement>(null);
+  const fullscreen = useGameFullscreen(root);
   const [mounted, setMounted] = useState(false);
   useEffect(() => {
     restorePreferences(); clearInput(); input.yaw = 0; input.pitch = -0.03;
@@ -78,10 +83,10 @@ export default function Experience() {
       document.activeElement.blur();
   }, [phase, run]);
   const blurAction = () => { if (document.activeElement instanceof HTMLElement) document.activeElement.blur(); };
-  const begin = () => { void sound.start().catch(() => {}); useGame.getState().setPhase("playing"); blurAction(); capturePointer(); };
-  const restart = () => { clearInput(); input.yaw = 0; input.pitch = -0.03; sound.reset(); useGame.getState().restart(); blurAction(); capturePointer(); };
-  const exit = () => { useGame.getState().setPhase("loading"); clearInput(); document.exitPointerLock?.(); sound.stop(); };
-  return <main id="main" className={`experience phase-${phase}`}>
+  const begin = () => { fullscreen.autoEnter(); void sound.start().catch(() => {}); useGame.getState().setPhase("playing"); blurAction(); capturePointer(); };
+  const restart = () => { fullscreen.autoEnter(); clearInput(); input.yaw = 0; input.pitch = -0.03; sound.reset(); useGame.getState().restart(); blurAction(); capturePointer(); };
+  const exit = () => { useGame.getState().setPhase("loading"); clearInput(); document.exitPointerLock?.(); fullscreen.exit(); sound.stop(); };
+  return <main ref={root} id="main" className={`experience phase-${phase}`}>
     <div className="world" onPointerDown={e => { if (e.pointerType === "mouse" && phase === "playing") input.dragging = true; }} onPointerCancel={() => { input.dragging = false; }}>
       {mounted && <SceneBoundary><Scene /></SceneBoundary>}
     </div>
@@ -100,29 +105,17 @@ export default function Experience() {
           {slow && quality === "high" && <p className="performance-note">High is running slowly. <button onClick={() => useGame.getState().setQuality("auto")}>Use Auto</button></p>}
           <ControlGuide compact />
           <p className="backend-note">{process.env.NEXT_PUBLIC_DECISION_BACKEND === "jev" ? "Live Jev intelligence" : "Preview"}</p>
-          {providerUnavailable && <p role="status">Jev is unavailable. Existing support is held. Try resuming shortly.</p>}
+          {fullscreen.supported && <button className="fullscreen-menu" onClick={() => fullscreen.active ? fullscreen.exit() : fullscreen.enter()}>{fullscreen.active ? "Exit fullscreen" : "Fullscreen"}</button>}
         </>}
         <Link href="/" onClick={exit}>Back to home</Link>
       </div>
     </section>}
     {phase === "playing" && <>
-      <button className="pause" aria-label="Pause" onClick={pause}>Pause</button>
+      <button className="pause" aria-label="Pause" onPointerDown={e => { if (e.pointerType !== "mouse") { e.preventDefault(); pause(); } }} onClick={pause}>Pause</button>
+      {fullscreen.active && <button className="fullscreen-exit" onPointerDown={e => { if (e.pointerType !== "mouse") { e.preventDefault(); fullscreen.exit(); } }} onClick={fullscreen.exit}>Exit fullscreen</button>}
       <TouchControls />
     </>}
+    <PreviewNotice />
     <noscript><p className="noscript">Playing needs JavaScript and WebGL 2. <a href="/">Back to home</a></p></noscript>
   </main>;
-}
-
-function TouchControls() {
-  const origin = useRef<[number, number] | null>(null), look = useRef<[number, number] | null>(null);
-  const clearMove = () => { origin.current = null; input.forward = input.right = 0; };
-  return <div className="touch-controls">
-    <div className="touch-move" aria-label="Movement joystick" onPointerDown={e => { e.currentTarget.setPointerCapture(e.pointerId); origin.current = [e.clientX, e.clientY]; }} onPointerMove={e => {
-      if (!origin.current) return; input.right = Math.max(-1, Math.min(1, (e.clientX - origin.current[0]) / 45)); input.forward = Math.max(-1, Math.min(1, (origin.current[1] - e.clientY) / 45));
-    }} onPointerUp={clearMove} onPointerCancel={clearMove} onLostPointerCapture={clearMove}><span /></div>
-    <div className="touch-look" aria-label="Look around" onPointerDown={e => { e.currentTarget.setPointerCapture(e.pointerId); look.current = [e.clientX, e.clientY]; }} onPointerMove={e => {
-      if (!look.current) return; input.yaw -= (e.clientX - look.current[0]) * 0.004; input.pitch = Math.max(-1.3, Math.min(1.3, input.pitch - (e.clientY - look.current[1]) * 0.004)); look.current = [e.clientX, e.clientY];
-    }} onPointerUp={() => { look.current = null; }} onPointerCancel={() => { look.current = null; }} />
-    <button className="touch-jump" aria-label="Jump" onPointerDown={e => { e.currentTarget.setPointerCapture(e.pointerId); input.jump = input.jumpQueued = true; }} onPointerUp={() => { input.jump = false; }} onPointerCancel={() => { input.jump = false; }}>↑</button>
-  </div>;
 }

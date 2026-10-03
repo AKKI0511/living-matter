@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useRef, useState, type ComponentRef } from "react";
+import { useEffect, useMemo, useRef, useState, type ComponentRef, type RefObject } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Physics } from "@react-three/rapier";
 import {
@@ -12,12 +12,12 @@ import { useGame } from "./store";
 import { Player } from "./Player";
 import { Matter } from "./Matter";
 import { Atmosphere, World } from "./EnvironmentWorld";
-import { createRuntime, formMatter } from "./runtime";
+import { createRuntime, formMatter, type Runtime } from "./runtime";
 import { decisionAuditEnabled } from "./decision-audit-mode";
 import { input } from "./input";
 import type { FormationKind, Vec3 } from "./world";
 import { sites } from "./world";
-import { weaveRoute } from "./weave";
+import { weaveRoute, WEAVE_SECONDS } from "./weave";
 import { frameSummary, renderDpr } from "./quality";
 
 type PipelineInfo = { buffer: number[]; aoBuffer: number[]; gammaCorrection: boolean };
@@ -41,7 +41,7 @@ declare global {
   }
 }
 
-function Simulation() {
+function Simulation({ runtimeRef }: { runtimeRef: RefObject<Runtime | null> }) {
   const gl = useThree((s) => s.gl);
   const scene = useThree((s) => s.scene);
   const runtime = useMemo(() => createRuntime(), []);
@@ -63,6 +63,7 @@ function Simulation() {
   }, [phase, runtime]);
   useEffect(() => {
     runtime.disposed = false;
+    runtimeRef.current = runtime;
     if (useGame.getState().phase === "loading")
       useGame.getState().setPhase("ready");
     if (process.env.NODE_ENV === "development")
@@ -82,6 +83,7 @@ function Simulation() {
             matterUnits,
             time: runtime.time,
             player: runtime.player,
+            velocity: runtime.velocity,
             grounded: runtime.grounded,
             recoveries: runtime.recoveries,
             states: runtime.states,
@@ -124,10 +126,11 @@ function Simulation() {
       };
     return () => {
       runtime.disposed = true;
+      if (runtimeRef.current === runtime) runtimeRef.current = null;
       runtime.gate.reset();
       delete window.__livingMatter;
     };
-  }, [runtime, gl, scene]);
+  }, [runtime, gl, scene, runtimeRef]);
   useEffect(() => {
     if (phase !== "playing") runtime.gate.reset();
   }, [phase, runtime]);
@@ -145,7 +148,7 @@ function Simulation() {
   );
 }
 
-function PerformanceBudget() {
+function PerformanceBudget({ runtimeRef }: { runtimeRef: RefObject<Runtime | null> }) {
   const quality = useGame(s => s.quality);
   const measurements = useRef({ elapsed: 0, samples: [] as number[], tested: false, settled: false });
   useEffect(() => { measurements.current = { elapsed: 0, samples: [], tested: false, settled: false }; }, [quality]);
@@ -160,6 +163,9 @@ function PerformanceBudget() {
     const { p95 } = frameSummary(m.samples);
     if (quality === "auto") {
       if (!m.tested && p95 <= 19) {
+        const runtime = runtimeRef.current;
+        if (!runtime || runtime.states.some(s => s.phase === "forming") ||
+          runtime.weave?.banks.some(b => runtime.time - b.since < WEAVE_SECONDS)) return;
         useGame.setState({ renderQuality: "high" }); m.tested = true; m.elapsed = 0; m.samples = []; return;
       }
       if (m.tested && p95 > 24) useGame.setState({ renderQuality: "low" });
@@ -181,6 +187,8 @@ function ContextLifecycle() {
 
 function HighEffects() {
   const gl = useThree(s => s.gl);
+  const scene = useThree(s => s.scene), camera = useThree(s => s.camera);
+  const [ready, setReady] = useState(false);
   const composer = useRef<ComponentRef<typeof EffectComposer>>(null);
   const ao = useRef<ComponentRef<typeof N8AO>>(null);
   const buffer = useMemo(() => new Vector2(), []);
@@ -188,13 +196,25 @@ function HighEffects() {
   // Synchronize once per actual buffer change, before the composer's render.
   useFrame(() => {
     const effect = composer.current;
+    // Composer creation and pass attachment span several React commits. Keep
+    // drawing the world until the entire pipeline can present a frame.
+    if (!ready) {
+      const toneMapping = gl.toneMapping;
+      const autoClear = gl.autoClear;
+      gl.autoClear = true;
+      gl.toneMapping = ACESFilmicToneMapping;
+      gl.render(scene, camera);
+      gl.toneMapping = toneMapping;
+      gl.autoClear = autoClear;
+      if (effect && ao.current && effect.passes.length >= 3) setReady(true);
+    }
     if (!effect) return;
     gl.getDrawingBufferSize(buffer);
     if (effect.inputBuffer.width !== buffer.x || effect.inputBuffer.height !== buffer.y) {
       gl.getSize(buffer);
       effect.setSize(buffer.x, buffer.y);
     }
-  });
+  }, 1);
   useEffect(() => {
     if (process.env.NODE_ENV !== "development") return;
     pipelineInfo.set(gl, () => composer.current && ao.current ? {
@@ -204,7 +224,7 @@ function HighEffects() {
     } : null);
     return () => { pipelineInfo.delete(gl); };
   }, [gl]);
-  return <EffectComposer ref={composer} multisampling={4}>
+  return <EffectComposer ref={composer} enabled={ready} renderPriority={2} multisampling={4}>
     <N8AO ref={pass => {
       ao.current = pass;
       // N8AO 2's post pass defaults to sRGB output. Keep intermediate color
@@ -216,13 +236,15 @@ function HighEffects() {
 }
 
 export default function Scene() {
+  const runtimeRef = useRef<Runtime | null>(null);
   const run = useGame((s) => s.run),
     quality = useGame((s) => s.renderQuality);
   const phase = useGame((s) => s.phase);
   const [size, setSize] = useState(() => ({ width: innerWidth, height: innerHeight, dpr: devicePixelRatio }));
   useEffect(() => {
     const resize = () => setSize({ width: innerWidth, height: innerHeight, dpr: devicePixelRatio });
-    addEventListener("resize", resize); return () => removeEventListener("resize", resize);
+    addEventListener("resize", resize); visualViewport?.addEventListener("resize", resize);
+    return () => { removeEventListener("resize", resize); visualViewport?.removeEventListener("resize", resize); };
   }, []);
   return (
     <Canvas
@@ -237,10 +259,10 @@ export default function Scene() {
         toneMappingExposure: 1.05,
       }}
     >
-      <PerformanceBudget />
+      <PerformanceBudget runtimeRef={runtimeRef} />
       <ContextLifecycle />
       <Atmosphere />
-      <Simulation key={run} />
+      <Simulation key={run} runtimeRef={runtimeRef} />
       {quality === "high" && <HighEffects />}
     </Canvas>
   );

@@ -38,3 +38,46 @@ test("High keeps linear intermediate color and follows DPR changes at fixed CSS 
   }
   await cdp.detach();
 });
+
+test("Auto finishes a formation before switching effects and keeps drawing during the handoff", async ({ page }) => {
+  test.skip(!!process.env.CI, "Auto upgrade and frame checks run on local hardware");
+  await page.addInitScript(() => {
+    const prototype = WebGL2RenderingContext.prototype;
+    const draw = prototype.drawElementsInstanced;
+    let worldDraws = 0;
+    const frames: { time: number; draws: number }[] = [];
+    Object.assign(window, { __worldFrames: frames });
+    prototype.drawElementsInstanced = function(...args) {
+      worldDraws++;
+      return Reflect.apply(draw, this, args);
+    };
+    const frame = () => {
+      const runtime = window.__livingMatter?.snapshot() as { time: number; phase: string } | undefined;
+      if (runtime?.phase === "playing" && runtime.time > 8) frames.push({ time: runtime.time, draws: worldDraws });
+      worldDraws = 0; requestAnimationFrame(frame);
+    };
+    requestAnimationFrame(frame);
+  });
+  await page.goto("/play");
+  await page.getByLabel("Graphics", { exact: true }).selectOption("auto");
+  await page.getByRole("button", { name: "Play", exact: true }).click();
+  await page.waitForFunction(() => (window.__livingMatter!.snapshot() as { time: number }).time >= 10, undefined, { polling: "raf" });
+  await page.evaluate(() => window.__livingMatter!.formation(0, "weave"));
+  await page.waitForFunction(() => {
+    const state = window.__livingMatter!.snapshot() as { time: number; states: { since: number }[] };
+    return state.time - state.states[0].since >= 2;
+  }, undefined, { polling: "raf" });
+  expect(await page.evaluate(() => window.__livingMatter!.renderInfo().pipeline)).toBeNull();
+  await expect.poll(() => page.evaluate(() => (window.__livingMatter!.snapshot() as { states: { phase: string }[] }).states[0].phase)).toBe("active");
+  await expect.poll(() => page.evaluate(() => window.__livingMatter!.renderInfo().pipeline)).not.toBeNull();
+  await page.waitForFunction(() => (window.__livingMatter!.snapshot() as { time: number }).time > 16, undefined, { polling: "raf" });
+  const frames = await page.evaluate(() => (window as unknown as { __worldFrames: { time: number; draws: number }[] }).__worldFrames);
+  expect(frames.length).toBeGreaterThan(120);
+  // Browser task scheduling may split a boundary, but an unready composer must
+  // never leave a consecutive run of frames without drawing world geometry.
+  let emptyRun = 0;
+  for (const frame of frames) {
+    emptyRun = frame.draws ? 0 : emptyRun + 1;
+    expect(emptyRun).toBeLessThan(3);
+  }
+});

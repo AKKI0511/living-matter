@@ -51,6 +51,7 @@ export function Matter({ runtime }: { runtime: Runtime }) {
     body = useRef<RapierRigidBody>(null);
   const colliders = useRef<(RapierCollider | null)[]>([]);
   const weaveColliders = useRef<(RapierCollider | null)[]>([]);
+  const colliderBanks = useRef<(WeaveBank | null)[]>([null, null]);
   const bankVersions = useRef([-1, -1]);
   const bankPoses = useRef<
     ({
@@ -171,7 +172,7 @@ export function Matter({ runtime }: { runtime: Runtime }) {
         state?.phase === "active" &&
         runtime.time - bank.since >= WEAVE_SECONDS;
       c.setEnabled(enabled);
-      if (bank) {
+      if (bank && colliderBanks.current[i] !== bank) {
         const g = bankGeometry(bank);
         const alongSlope = g.rise / g.run, crossSlope = bank.crossSlope ?? 0;
         const ux = g.dx / g.run, uz = g.dz / g.run;
@@ -190,6 +191,7 @@ export function Matter({ runtime }: { runtime: Runtime }) {
           z: (bank.from[2] + bank.to[2]) / 2 - bankNormal.z * 0.15,
         });
         c.setRotationWrtParent(bankQuaternion);
+        colliderBanks.current[i] = bank;
       }
       if (enabled) runtime.solidColliderHandles.add(c.handle);
     });
@@ -259,24 +261,14 @@ export function Matter({ runtime }: { runtime: Runtime }) {
           : null;
       const wave =
         Math.sin(runtime.time * 0.8 + Math.floor(i / 64) * 0.3) * 0.055;
-      const target = pose
-        ? [
-            pose.position[0] + state!.offset[0],
-            pose.position[1] + state!.offset[1],
-            pose.position[2] + state!.offset[2],
-            ...pose.scale,
-          ]
-        : [
-            companion[0] + ((i % 8) - 3.5) * 0.36,
-            companion[1] + (Math.floor(i / 64) - 3.5) * 0.36 + wave,
-            companion[2] + ((Math.floor(i / 8) % 8) - 3.5) * 0.36,
-            0.32,
-            0.32,
-            0.32,
-          ];
       const arc = Math.sin(t * Math.PI);
-      for (let a = 0; a < 6; a++)
-        live[j + a] = origin[j + a] + (target[a] - origin[j + a]) * t;
+      for (let a = 0; a < 6; a++) {
+        const target = pose ? (a < 3 ? pose.position[a] + state!.offset[a] : pose.scale[a - 3])
+          : a >= 3 ? 0.32 : companion[a] + (a === 0 ? ((i % 8) - 3.5) * 0.36
+            : a === 1 ? (Math.floor(i / 64) - 3.5) * 0.36 + wave
+            : ((Math.floor(i / 8) % 8) - 3.5) * 0.36);
+        live[j + a] = origin[j + a] + (target - origin[j + a]) * t;
+      }
       live[j + 1] += arc * (2.5 + (i % 8) * 0.12);
       dummy.position.set(live[j], live[j + 1], live[j + 2]);
       dummy.scale.set(live[j + 3], live[j + 4], live[j + 5]);

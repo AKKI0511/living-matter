@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useRef } from "react";
+import { memo, useEffect, useMemo, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { Environment, Lightformer } from "@react-three/drei";
 import { CuboidCollider, RigidBody } from "@react-three/rapier";
@@ -210,8 +210,12 @@ function Landmark({ stone, brass }: { stone: MeshStandardMaterial; brass: MeshSt
   </>;
 }
 
-export function Atmosphere() {
+export const Atmosphere = memo(function Atmosphere() {
   const night=useGame(s=>s.night);
+  const reflections = useMemo(() => <>
+    <Lightformer form="rect" intensity={1.6} color="#c0d7dd" scale={[100,100,1]} position={[0,40,0]} rotation={[Math.PI/2,0,0]} />
+    <Lightformer form="rect" intensity={3} color="#fff0d3" scale={[45,45,1]} position={[-30,40,-60]} rotation={[0,.6,0]} />
+  </>, []);
   return <>
     <Sky /><NightStars /><Moon />
     <fog attach="fog" args={[night?"#182d40":"#b1c2bc",110,510]} />
@@ -219,11 +223,10 @@ export function Atmosphere() {
     <hemisphereLight args={[night?"#9aaec9":"#deebe1",night?"#394945":"#9a8d72",night?.8:.72]} />
     <Sunlight />
     <Environment resolution={128} frames={1} environmentIntensity={night?.3:.6}>
-      <Lightformer form="rect" intensity={1.6} color="#c0d7dd" scale={[100,100,1]} position={[0,40,0]} rotation={[Math.PI/2,0,0]} />
-      <Lightformer form="rect" intensity={3} color="#fff0d3" scale={[45,45,1]} position={[-30,40,-60]} rotation={[0,.6,0]} />
+      {reflections}
     </Environment>
   </>;
-}
+});
 
 export function World() {
   const materials=useMemo(() => {

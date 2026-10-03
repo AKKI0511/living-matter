@@ -22,7 +22,7 @@ Vercel Marketplace's `KV_REST_API_URL` and `KV_REST_API_TOKEN` are also supporte
 
 [`decision-budget.ts`](../src/server/decision-budget.ts) atomically reserves requests in Redis across serverless instances. It enforces the aggregate daily cap, 70 requests per IP per minute and 250 requests per session within a one-hour window. Missing or unavailable Redis prevents live production inference. The in-memory concurrency guard protects one instance only.
 
-The endpoint validates physical state, enforces same-origin requests in production, limits the streamed body to 24 KB and gives body reading three seconds. Jev has a 1.6-second deadline with no SDK retries. The browser decision gate ordinarily expires after two seconds. Existing safe support remains in place after failure.
+The endpoint validates physical state, enforces same-origin requests in production, limits the streamed body to 24 KB and gives body reading three seconds. Jev has a 1.6-second deadline with no SDK retries. The browser falls back to Preview before its two-second decision gate expires. Failed calls use increasing cooldowns and respect `Retry-After`; a successful probe restores Jev. Existing occupied support remains protected in either mode.
 
 The home page and inactive runs schedule no inference. Production auditing is disabled and needs no writable filesystem. Keep `.env.local`, recordings and audit directories out of Git and deployment uploads.
 
