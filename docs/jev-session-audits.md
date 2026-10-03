@@ -26,7 +26,7 @@ The first command summarizes the newest run. Replay shows the recorded sequence 
 
 Read the request, answer and outcome together. A selected candidate may be discarded because the player moved before the answer arrived. An applied formation proves execution, but does not establish that the choice matched the player's intent.
 
-Replay reports changes to requests or composed decisions. It reuses historical answers and cannot predict how Jev will answer revised questions. It also does not rerun physics or reproduce the rendered world. Interrupted recordings may lack a response; missing usage remains unknown. Recorded cost estimates use the saved rate and are not an account bill.
+Replay reports changes to requests or composed decisions. When the prompt has changed, it marks the call `prompt_changed` and does not interpret historical answers as answers to the new questions. It cannot predict how Jev will answer revised questions, rerun physics or reproduce the rendered world. Interrupted recordings may lack a response; missing usage remains unknown. Recorded cost estimates use the saved rate and are not an account bill.
 
 Audit writing extends the development browser deadline to five seconds; ordinary play keeps the two-second deadline. Freshness checks still apply.
 
@@ -44,7 +44,7 @@ This creates `review.json` without overwriting existing labels. Calls begin excl
   "include": true,
   "expected_answers": {
     "action_needed": true,
-    "best_candidate": "candidate_0"
+    "best_candidate": "option_a"
   },
   "notes": "The player waited at unsupported space after attempting a crossing; this walkable section matches the intended direction.",
   "tags": ["edge", "crossing"]

@@ -133,7 +133,7 @@ export function describePhysical(o: Observation, scene: PhysicalScene): Physical
   }
   return event;
 }
-function heightWord(rise: number) { return rise > 1 ? "higher" : rise < -1 ? "lower" : "at similar height"; }
+function heightWord(rise: number) { return rise > 0.15 ? "higher" : rise < -0.15 ? "lower" : "at similar height"; }
 export function describeMatter(o: Observation, scene: PhysicalScene): MatterDescription {
   const supported = matterSupport(o.position, o.grounded, scene);
   const state = scene.activeSite === null ? "idle" : scene.phase === "forming" ? "forming" : "active";
@@ -154,30 +154,40 @@ export function describeMatter(o: Observation, scene: PhysicalScene): MatterDesc
 export function describeCandidate(candidate: Candidate, o: Observation, supported: boolean): Record<string, string> {
   const p = candidate.physical!;
   const end = candidate.route && !supported ? candidate.route[1] : p.to;
-  const direction = relativeDirection(o.position, end, o.gaze);
-  const headingAngle = Math.atan2(
-    o.gaze[0] * (end[2] - p.from[2]) - o.gaze[2] * (end[0] - p.from[0]),
-    o.gaze[0] * (end[0] - p.from[0]) + o.gaze[2] * (end[2] - p.from[2]),
-  );
+  const dx = end[0] - o.position[0], dz = end[2] - o.position[2];
+  const alignment = (x: number, z: number) => {
+    const dot = (x * dx + z * dz) / ((Math.hypot(x, z) || 1) * (Math.hypot(dx, dz) || 1));
+    return dot > 0.96 ? "aligned" : dot > 0.75 ? "close" : dot > 0.25 ? "oblique" : dot > -0.25 ? "sideways" : "opposed";
+  };
+  const turn = candidate.turnDegrees ?? 0;
+  let path = turn ? `${Math.abs(turn) <= 45 ? "gentle" : "sharp"} ${turn > 0 ? "right" : "left"} turn` : "straight";
+  if (candidate.route) {
+    const a = candidate.route[0], b = candidate.route.at(-1)!;
+    const run = Math.hypot(b[0] - a[0], b[2] - a[2]) || 1;
+    const offset = ((end[0] - a[0]) * -(b[2] - a[2]) + (end[2] - a[2]) * (b[0] - a[0])) / run;
+    path = Math.abs(offset) < 0.5 ? "straight" : `bends ${offset > 0 ? "right" : "left"} before returning toward the destination`;
+  }
+  const formation = candidate.kind === "platform" ? "moving deck" : candidate.kind === "stairs" ? "steps" :
+    candidate.kind === "floating-path" ? "stepping surfaces" : candidate.kind === "bridge" ? "bridge" : candidate.attachment === "middle" ? "side branch with a broad base" :
+    turn ? "turning path with arched support" : "walking path";
+  const landing = (point: Vec3) => permanentSupport([point[0], point[1] + 0.825, point[2]]) ? "solid ground" : "open gap";
   return {
+    formation,
     player_use: candidate.kind === "platform" ? "ride a moving deck" : "walk",
-    ...(candidate.attachment ? { attachment: candidate.attachment === "middle" ? "side rim" : "end" } : {}),
-    ...(candidate.turnDegrees ? { path_shape: `${Math.abs(candidate.turnDegrees)} degree ${candidate.turnDegrees > 0 ? "right" : "left"} turn` } : {}),
-    starts_from: relativeDirection(o.position, p.from, o.gaze),
-    attachment_distance_units: p.distance.toFixed(1),
-    extends: direction,
+    attachment: candidate.attachment === "middle" ? "side of existing walking surface" :
+      candidate.attachment ? "end of existing walking surface" : "edge of solid ground",
+    starts_from: p.distance < 0.4 ? "beneath the person" : relativeDirection(o.position, p.from, o.gaze),
+    attachment_proximity: p.distance < 1.5 ? "at the person" : p.distance < 4.5 ? "nearby" : "farther along the surface",
     heading: relativeDirection(p.from, end, o.gaze),
-    view_offset_degrees: `${Math.round(Math.abs(headingAngle) * 180 / Math.PI)} ${headingAngle < 0 ? "left" : "right"}`,
+    view_alignment: alignment(o.gaze[0], o.gaze[2]),
+    movement_alignment: Math.hypot(o.velocity[0], o.velocity[2]) > 0.6 ? alignment(o.velocity[0], o.velocity[2]) : "not moving horizontally",
     vertical_change: heightWord(end[1] - p.from[1]),
-    length_units: Math.hypot(end[0] - p.from[0], end[2] - p.from[2]).toFixed(1),
-    rise_units: (end[1] - p.from[1]).toFixed(1),
-    ...(candidate.route ? { path_shape: (() => {
-      const a = candidate.route[0], b = candidate.route.at(-1)!;
-      const run = Math.hypot(b[0] - a[0], b[2] - a[2]) || 1;
-      const offset = ((end[0] - a[0]) * -(b[2] - a[2]) + (end[2] - a[2]) * (b[0] - a[0])) / run;
-      return Math.abs(offset) < 0.5 ? "straight" : `${offset > 0 ? "right" : "left"} of shore line`;
-    })() } : {}),
-    ends_at: permanentSupport([end[0], end[1] + 0.825, end[2]]) ? "ground" : "open space",
+    path_shape: path,
+    surface_tilt: Math.abs(candidate.crossSlope ?? 0) > 0.02 ? "tilted across its width" : "level across its width",
+    next_surface_ends_at: landing(end),
+    ...(end !== p.to && end.some((value, axis) => value !== p.to[axis]) ? {
+      eventual_destination: landing(p.to), destination_height: heightWord(p.to[1] - p.from[1]),
+    } : {}),
   };
 }
 export class PhysicalHistory {

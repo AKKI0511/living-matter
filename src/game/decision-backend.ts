@@ -36,7 +36,7 @@ export class JevDecisions implements DecisionSource {
     if (!latest) return { candidateId: null };
     if (currentDirectionServed(context.semantic)) return { candidateId: null, hold: true };
     const signature = JSON.stringify({
-      semantic: context.semantic ? decisionState(context.semantic) : undefined,
+      semantic: context.semantic ? decisionState(context.semantic, context.observations) : undefined,
       candidates: context.candidates.map((c) => ({
         id: c.id, route: c.route, from: c.physical?.from, to: c.physical?.to,
         meaning: c.physical ? describeCandidate(c, latest, !!context.semantic?.matter_now.player_supported_by_matter) : undefined,

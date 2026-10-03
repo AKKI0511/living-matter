@@ -15,7 +15,7 @@ test("a true westward side branch exists and only the unoccupied half changes", 
   assert.ok(options.candidates.length <= 16);
   assert.ok(options.candidates.every(c => withinMatterBounds(sites[0], c.physical!.to)));
   const sample: Observation = { time: 5, position: p, velocity: [0, 0, 0], grounded: true, gaze: [-1, 0, 0], activeStructure: "reach" };
-  assert.equal(describeCandidate(west, sample, true).extends, "ahead");
+  assert.equal(describeCandidate(west, sample, true).heading, "ahead");
   applySteeringCandidate(weave, options.bank, west, 5);
   assert.equal(weave.banks[0], occupied);
   assert.equal(weave.banks[1].to[2], occupied.from[2] - 3);
@@ -30,8 +30,9 @@ test("ordinary turns offer both diagonal ramps and a distinct supported form", (
   const diagonal = options.candidates.find(c => c.attachment === "far end" && c.turnDegrees === 35 && c.physical?.rise === 1.5)!;
   assert.ok(diagonal);
   const sample: Observation = { time: 5, position: [0, 1.885, -29], velocity: [0, 0, 0], gaze: [0.4, 0.2, -0.9], grounded: true, activeStructure: "reach" };
-  assert.match(describeCandidate(diagonal, sample, true).path_shape, /35 degree right turn/);
-  assert.ok(Number.parseInt(describeCandidate(diagonal, sample, true).view_offset_degrees) < 20);
+  assert.equal(describeCandidate(diagonal, sample, true).path_shape, "gentle right turn");
+  assert.equal(describeCandidate(diagonal, sample, true).view_alignment, "aligned");
+  assert.equal(describeCandidate(diagonal, sample, true).formation, "turning path with arched support");
   applySteeringCandidate(weave, options.bank, diagonal, 5);
   assert.equal(weave.banks[0], occupied);
   assert.equal(weave.banks[1].shape, "arch");

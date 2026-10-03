@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { currentDirectionServed, decisionState } from "../src/game/decision-state";
+import { assertSemanticPrompt, currentDirectionServed, decisionState } from "../src/game/decision-state";
 import { PhysicalHistory, type SemanticState } from "../src/game/semantic";
 import { JevDecisions } from "../src/game/decision-backend";
 import { availableCandidates } from "../src/game/affordances";
@@ -12,11 +12,51 @@ const semantic: SemanticState = { player_now: now, recent_behavior_oldest_to_new
 test("compact state retains traversal evidence and omits repeated current and engine rules", () => {
   const jumped = { ...now, motion: "jumped and landed back on the same support", facing_into: "open air" };
   const state = decisionState({ ...semantic, recent_behavior_oldest_to_newest: [jumped, now], matter_now: { ...semantic.matter_now, occupied_section: "protected by the engine" } });
-  assert.equal(state.recent_behavior.length, 1);
-  assert.equal(state.recent_behavior[0].motion, jumped.motion);
-  assert.equal(state.recent_behavior[0].facing_into, "open air");
-  assert.equal(state.player_now, now);
-  assert.equal("occupied_section" in state.matter_now, false);
+  assert.equal(state.recent_behavior_oldest_to_newest.length, 1);
+  assert.equal(state.recent_behavior_oldest_to_newest[0].motion, jumped.motion);
+  assert.equal(state.recent_behavior_oldest_to_newest[0].facing_into, "gap without a continuous walking surface");
+  assert.equal(state.player_now.support, "solid ground");
+  assert.equal("occupied_section" in state.material_now, false);
+  assert.match(state.scene, /material that can reshape/);
+  assert.doesNotThrow(() => assertSemanticPrompt(state));
+});
+
+test("history keeps previous edge and height changes and the last unsuccessful attempt", () => {
+  const events = [
+    { ...now, motion: "jumped and landed back on the same support" },
+    { ...now, motion: "walking right" },
+    { ...now, motion: "standing", position_on_support: "near an edge", view_height: "looking upward" },
+    { ...now, motion: "standing", position_on_support: "at an edge", view_height: "looking downward" },
+    { ...now, motion: "walking left" },
+    { ...now, motion: "running forward" },
+  ];
+  const result = decisionState({ ...semantic, recent_behavior_oldest_to_newest: events });
+  assert.equal(result.recent_behavior_oldest_to_newest.length, 4);
+  assert.equal(result.recent_behavior_oldest_to_newest[0].motion, events[0].motion);
+  assert.ok(result.recent_behavior_oldest_to_newest.some(event => event.view_height === "looking downward" && event.position_on_support === "at the surface edge"));
+});
+
+test("view commitment distinguishes holding a view from scanning without exposing time or angles", () => {
+  const sample: Observation = { time: 1, position: [0,.825,-23], gaze: [0,.3,-1], velocity: [0,0,0], grounded: true, activeStructure: null };
+  const held = [sample, { ...sample, time: 1.3 }, { ...sample, time: 1.7 }];
+  assert.equal(decisionState(semantic, held).player_now.view_attention, "view held in the same direction");
+  assert.equal(decisionState(semantic, [sample, { ...sample, time: 1.7, gaze: [1,0,0] }]).player_now.view_attention, "view is changing direction");
+  assert.equal(decisionState(semantic, [sample]).player_now.view_attention, "view persistence not observed");
+});
+
+test("numeric details and arbitrary client vocabulary cannot enter the semantic prompt", () => {
+  for (const value of [3, true, { option_2: "left" }, { heading: "thirty degrees" }, { time: "two seconds" }, { count: "one" }])
+    assert.throws(() => assertSemanticPrompt(value));
+  const result = decisionState({ ...semantic, player_now: { ...now, motion: "run 30 units", view_height: "pitch 40" },
+    matter_now: { ...semantic.matter_now, form: "512 cubes" } });
+  assert.doesNotThrow(() => assertSemanticPrompt(result));
+  assert.equal(result.player_now.motion, "movement not observed");
+  assert.equal(result.player_now.view_height, undefined);
+});
+
+test("repeated current descriptions are removed after translating engine vocabulary", () => {
+  const state = decisionState({ ...semantic, recent_behavior_oldest_to_newest: [now,now,now] });
+  assert.deepEqual(state.recent_behavior_oldest_to_newest,[]);
 });
 
 test("continuous forward support holds without transport; gaps, lateral and backward intent still reach Jev", async t => {
