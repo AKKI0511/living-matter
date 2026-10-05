@@ -1,5 +1,7 @@
 import { expect, observeJump, test } from "./fixtures";
 
+declare global { interface Window { cancelledJump?: Promise<boolean> } }
+
 test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
 
 test("stick tracks the finger, walks then sprints, and handles simultaneous look/jump and rotation", async ({ page }) => {
@@ -66,15 +68,25 @@ test("cancelled jump pointers do not jump, while a quick tap still does", async 
   await expect.poll(async () => (await state()).grounded).toBe(true);
   const jump = page.getByLabel("Jump", { exact: true });
   for (const type of ["pointercancel", "lostpointercapture"]) {
-    await jump.evaluate((button, type) => button.addEventListener("pointerdown", event => {
-      const pointerId = (event as PointerEvent).pointerId;
-      queueMicrotask(() => button.dispatchEvent(new PointerEvent(type, { bubbles: true, pointerId })));
-    }, { once: true }), type);
-    const before = await state();
+    await jump.evaluate((button, type) => {
+      window.cancelledJump = new Promise(resolve => {
+        // React handles the press at the root before this document listener.
+        document.addEventListener("pointerdown", event => {
+          button.dispatchEvent(new PointerEvent(type, { bubbles: true, pointerId: event.pointerId }));
+          const start = (window.__livingMatter!.snapshot() as { time: number }).time;
+          let jumped = false;
+          const sample = () => {
+            const state = window.__livingMatter!.snapshot() as { time: number; grounded: boolean };
+            jumped ||= !state.grounded;
+            if (state.time > start + .3) resolve(jumped);
+            else requestAnimationFrame(sample);
+          };
+          requestAnimationFrame(sample);
+        }, { once: true });
+      });
+    }, type);
     await jump.tap();
-    await page.waitForFunction(time => (window.__livingMatter!.snapshot() as { time: number }).time > time + .3, before.time);
-    expect((await state()).player[1]).toBeCloseTo(before.player[1], 1);
-    expect((await state()).grounded).toBe(true);
+    expect(await page.evaluate(() => window.cancelledJump)).toBe(false);
   }
   const jumped = observeJump(page, (await state()).player[1] + .3);
   await jump.tap();
