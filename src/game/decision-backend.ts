@@ -8,6 +8,7 @@ import { describeCandidate } from "./semantic";
 import { currentDirectionServed, decisionState } from "./decision-state";
 import { useGame } from "./store";
 import { decisionDeadlineMs } from "./decision-audit-mode";
+import { deliberateHeightView, VIEW_DOWN_HEIGHT_THRESHOLD } from "./view-intent";
 
 export const decisionBackend =
   process.env.NEXT_PUBLIC_DECISION_BACKEND === "jev" ? "jev" : "preview";
@@ -21,11 +22,18 @@ export class JevDecisions implements DecisionSource {
   private failures = 0;
   private epoch = 0;
   private preview = new ScenarioDecisions();
+  private queriedAt = 0;
+  private commitment: { id: string; observation: DecisionContext["observations"][number]; height?: string } | null = null;
   constructor(private timeoutMs = decisionDeadlineMs() - 250) {}
   reset() {
     this.epoch++;
     this.cached = null;
     this.signature = "";
+    this.commitment = null;
+  }
+  commit(id: string, observation: DecisionContext["observations"][number]) {
+    this.commitment = { id, observation: structuredClone(observation),
+      height: observation.gaze[1] >= .22 ? "higher" : observation.gaze[1] <= -VIEW_DOWN_HEIGHT_THRESHOLD ? "lower" : undefined };
   }
   async select(
     context: DecisionContext,
@@ -34,17 +42,33 @@ export class JevDecisions implements DecisionSource {
     if (!context.candidates.length) return { candidateId: null };
     const latest = context.observations.at(-1);
     if (!latest) return { candidateId: null };
-    if (currentDirectionServed(context.semantic)) return { candidateId: null, hold: true };
+    if (context.current?.phase === "forming" || context.semantic?.matter_now.state === "forming") return { candidateId: null, hold: true };
+    const commitment = this.commitment;
+    const height = deliberateHeightView(context.observations);
+    if (commitment && context.current?.candidateId === commitment.id) {
+      const before = commitment.observation;
+      const distance = Math.hypot(latest.position[0] - before.position[0], latest.position[2] - before.position[2]);
+      const alignment = (latest.gaze[0] * before.gaze[0] + latest.gaze[2] * before.gaze[2]) /
+        ((Math.hypot(latest.gaze[0], latest.gaze[2]) || 1) * (Math.hypot(before.gaze[0], before.gaze[2]) || 1));
+      if (distance < 1.25 && alignment > 0.93 && (!height || height === commitment.height) &&
+        Math.hypot(latest.velocity[0], latest.velocity[2]) < 0.35)
+        return { candidateId: null, hold: true };
+    }
+    if (currentDirectionServed(context.semantic, context.observations)) return { candidateId: null, hold: true };
+    const state = context.semantic ? decisionState(context.semantic, context.observations) : undefined;
     const signature = JSON.stringify({
-      semantic: context.semantic ? decisionState(context.semantic, context.observations) : undefined,
+      // Expiring history alone is not fresh evidence for another inference.
+      semantic: state ? {player_now:state.player_now,material_now:state.material_now} : undefined,
+      height,
       candidates: context.candidates.map((c) => ({
         id: c.id, route: c.route, from: c.physical?.from, to: c.physical?.to,
         meaning: c.physical ? describeCandidate(c, latest, !!context.semantic?.matter_now.player_supported_by_matter) : undefined,
-      })),
+      })).sort((a,b) => a.id.localeCompare(b.id)),
       current: context.current,
     });
     const now = performance.now();
-    if (signature === this.signature && this.cached && now < this.expires)
+    const newAttempt = context.observations.some(o => o.time > this.queriedAt && (!o.grounded || o.velocity[1] > 2));
+    if (signature === this.signature && this.cached && !newAttempt && (this.cached.hold || now < this.expires))
       return { ...this.cached, auditId: undefined };
     // Retry quietly in the background; cooldowns never withdraw support.
     if (now < this.nextRequest) return this.failures
@@ -86,6 +110,8 @@ export class JevDecisions implements DecisionSource {
       )
         throw new Error("Invalid decision");
       this.cached = result;
+      this.queriedAt = latest.time;
+      if (result.candidateId) this.commitment = { id: result.candidateId, observation: structuredClone(latest), height };
       this.signature = signature;
       this.expires =
         performance.now() +

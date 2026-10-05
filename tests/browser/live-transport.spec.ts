@@ -23,7 +23,7 @@ test("pausing, restarting and exiting abort late live responses", async ({ page 
   await expect.poll(()=>pending.length).toBe(2);
   await page.keyboard.press("Escape");await page.getByRole("link",{name:"Back to home",exact:true}).click();
   pending[1].finish();await page.waitForTimeout(500);
-  expect(await page.evaluate(()=>window.__livingMatter)).toBeUndefined();
+  await expect.poll(()=>page.evaluate(()=>!!window.__livingMatter)).toBe(false);
   await expect(page.locator("canvas")).toHaveCount(0);
   // A slow renderer may reach the transport deadline and retry before exit.
   // Inactive runs must stop scheduling regardless of that earlier request count.

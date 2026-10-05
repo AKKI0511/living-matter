@@ -108,8 +108,8 @@ test("Jev receives one action Noul and one candidate Choice with no authored dir
   assert.equal(request.questions.best_candidate.type, "choice");
   const criteria = request.questions.best_candidate.criteria as Record<string, Record<string, string>>;
   assert.ok(Object.keys(criteria).length >= 2);
-  assert.ok(Object.values(criteria).some((c) => c.player_use === "walk"));
-  assert.ok(Object.values(criteria).some((c) => c.player_use === "ride a moving deck"));
+  assert.ok(Object.values(criteria).some((c) => c.formation === "walking path"));
+  assert.ok(Object.values(criteria).some((c) => c.formation === "moving deck"));
   assert.equal(JSON.stringify(request).includes('"reach"'), false);
   assert.equal(JSON.stringify(request).includes("span"), false);
 });
@@ -143,6 +143,8 @@ test("a side-rim branch can be chosen independently of forward traversal need", 
 
 test("an upward request at a matter edge can select a ramp despite existing level support", () => {
   const original = reachContext();
+  const latest=original.observations.at(-1)!;
+  original.observations=[0,.3,.7].map(age=>({...latest,time:latest.time-.7+age,gaze:[0,.3,-.95] as Vec3}));
   const context = decisionSchema.parse({ ...original, semantic: {
     ...original.semantic,
     player_now: { ...original.semantic.player_now, support: "living matter", position_on_support: "at an edge", facing_into: "living matter", view_height: "looking upward" },
@@ -195,7 +197,7 @@ test("shared Choice facts are preserved once while distinct routes remain availa
   assert.ok(options.length > 1);
   assert.ok(options.every(([, option]) => !("player_use" in option)));
   const instruction = buildDecisionRequest(context).questions.best_candidate.instructions as { shared_option_facts: Record<string, string> };
-  assert.equal(instruction.shared_option_facts.player_use, "walk");
+  assert.equal(instruction.shared_option_facts.formation, "walking path");
   assert.ok(options.some(([, option]) => "heading" in option));
   assert.equal(new Set(options.map(([, option]) => JSON.stringify(option))).size, options.length);
   const selected = options.at(-1)![0];

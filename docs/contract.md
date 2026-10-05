@@ -1,31 +1,15 @@
-# The player–matter contract
+# Player–matter contract
 
-[Architecture](architecture.md) · [How Jev works](jev.md) · [Docs](README.md)
+Jev and Preview use the same [selection interface](../src/game/decisions.ts). The engine owns geometry, collision and execution.
 
-Every backend selects through [`DecisionSource`](../src/game/decisions.ts). The engine owns the physical consequences of that selection.
+- One matter body contains 512 pieces. A weaving route reuses its unoccupied half; occupied support never retracts.
+- Candidates must fit the world, respect obstacles and remain reachable when the answer arrives.
+- Rendering and collision share the same surfaces. New formations catch landings during assembly without trapping the player.
+- Graphics settings change presentation, never movement or available formations.
+- Physics continues while a decision is pending. Responses from an obsolete run or an unsafe attachment cannot apply.
 
-| Step | Contract |
-| --- | --- |
-| Observe | Record movement, gaze, support, recent behavior and current matter state. |
-| Generate | Code supplies contributions that fit the physical world and available matter. |
-| Select | Jev or Preview returns a candidate ID or a hold through the same interface. |
-| Execute | Recheck freshness, support, available halves, bounds, route clearance and collision before applying the choice. |
-| Present | Animate the actual execution state and show availability only when support is active. |
+Pause cancels pending decisions. Restart starts a fresh run. Leaving the game releases input, audio and simulation resources.
 
-## Physical guarantees
+Provider failures continue through Preview, with a brief dismissible notice during play. Live production inference requires a [shared Redis reservation](deployment.md); local fallback makes no inference calls.
 
-- Exactly one body contains **512 pieces**, split into two reusable **256-piece halves**.
-- Occupied support cannot retract or recycle. Only a free half can rebuild.
-- A formation's visible surface and collision agree. An assembling path is not presented as completed support.
-- Graphics settings cannot change movement, geometry, physical availability or decision policy.
-- Preview preserves a usable next half through small glances while allowing deliberate turns and departures.
-
-## Decisions and lifecycle
-
-Physics and rendering continue independently of provider timing. The decision gate uses cancellation and a generation counter; execution also checks physical freshness. A delayed answer cannot apply to an obsolete situation or a different run.
-
-Pause aborts pending selection. Resume gathers fresh observations. Restart creates a new runtime and session. Exit aborts selection, stops simulation and audio, clears held input, releases pointer lock and disposes the run.
-
-Uncertain intent retains safe existing support. Clear intent with comparable useful formations can proceed even when Choice probability is spread across alternatives. Timeouts, rate limits and provider failures automatically use Preview through the same physical checks, with a brief dismissible notice during play. Jev resumes after a successful cooldown probe. Live inference still requires the shared Redis reservation; fallback makes no inference calls. Geometry, collision, timing and resource accounting remain in code.
-
-Focused tests cover [decision cancellation](../tests/decisions.test.ts), [freshness](../tests/decision-freshness.test.ts), [occupied support](../tests/steering.test.ts), [typed judgments](../tests/live-decisions.test.ts) and [browser lifecycle](../tests/browser/lifecycle.spec.ts). See [development](development.md) for the complete verification commands.
+See [development](development.md) for verification and [How Jev works](jev.md) for the decision method.

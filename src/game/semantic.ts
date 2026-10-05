@@ -1,6 +1,7 @@
 import { collisionBoxes, walkableGround as islands, sites, boxCoordinates, WEAVE_END_CAP, type Vec3 } from "./world";
 import { bankProgress, WEAVE_SECONDS, type Weave } from "./weave";
 import type { Candidate, Observation } from "./decisions";
+import { VIEW_DOWN_HEIGHT_THRESHOLD, VIEW_HEIGHT_THRESHOLD } from "./view-intent";
 
 export type PhysicalEvent = {
   support: string;
@@ -9,6 +10,7 @@ export type PhysicalEvent = {
   facing_into?: string;
   surface_beyond_facing?: string;
   view_height?: string;
+  walkway_axis?: string;
 };
 export type MatterDescription = {
   state: "idle" | "forming" | "active";
@@ -36,6 +38,9 @@ const flat = (v: Vec3): Vec3 => {
   const n = Math.hypot(v[0], v[2]) || 1;
   return [v[0] / n, 0, v[2] / n];
 };
+// Match the travel/selection cutoff: slower motion follows held view. Giving
+// Jev "walking" alongside "not moving horizontally" contradicts that intent.
+const MOVEMENT_INTENT_SPEED = 0.6;
 export function relativeDirection(from: Vec3, to: Vec3, gaze: Vec3) {
   const f = flat(gaze), d = flat([to[0] - from[0], 0, to[2] - from[2]]);
   const angle = Math.atan2(f[0] * d[2] - f[2] * d[0], f[0] * d[0] + f[2] * d[2]);
@@ -84,7 +89,7 @@ function matterAhead(p: Vec3, scene: PhysicalScene) {
 function motion(o: Observation) {
   if (!o.grounded) return o.velocity[1] > 1 ? "jumping" : "falling";
   const speed = Math.hypot(o.velocity[0], o.velocity[2]);
-  if (speed < 0.35) return "standing";
+  if (speed <= MOVEMENT_INTENT_SPEED) return "standing";
   const direction = relativeDirection(o.position, [o.position[0] + o.velocity[0], o.position[1], o.position[2] + o.velocity[2]], o.gaze);
   return `${speed > 5 ? "running" : "walking"} ${direction === "ahead" ? "forward" : direction}`;
 }
@@ -92,12 +97,18 @@ export function describePhysical(o: Observation, scene: PhysicalScene): Physical
   const p = o.position, gaze = flat(o.gaze), onMatter = matterSupport(p, o.grounded, scene);
   const ground = permanentSupport(p);
   const event: PhysicalEvent = { support: onMatter ? "living matter" : o.grounded && ground ? "permanent ground" : "unsupported", motion: motion(o) };
-  event.view_height = o.gaze[1] > 0.15 ? "looking upward" : o.gaze[1] < -0.15 ? "looking downward" : "looking roughly level";
+  event.view_height = o.gaze[1] > VIEW_HEIGHT_THRESHOLD ? "looking upward" : o.gaze[1] <= -VIEW_DOWN_HEIGHT_THRESHOLD ? "looking downward" : "looking roughly level";
   let edgeDistance = Infinity;
   if (onMatter && scene.weave) {
     const progress = scene.weave.banks.map((b) => bankProgress(b, p)).find((v) => v.supported);
     if (progress) {
       const bank = scene.weave.banks.find((b) => bankProgress(b, p).supported)!;
+      // An undirected axis: reversing bank endpoints must not change its
+      // meaning. All directions use the player's view, just like the options.
+      const axis = relativeDirection(bank.from, bank.to, o.gaze);
+      event.walkway_axis = axis === "ahead" || axis === "behind" ? "ahead to behind" :
+        axis === "left" || axis === "right" ? "left to right across view" :
+        axis === "ahead-left" || axis === "behind-right" ? "ahead-left to behind-right" : "ahead-right to behind-left";
       edgeDistance = Math.min(Math.min(progress.t, 1 - progress.t) * Math.hypot(bank.to[0] - bank.from[0], bank.to[2] - bank.from[2]), 2.4 - progress.across);
     }
   } else if (ground) {
@@ -180,7 +191,7 @@ export function describeCandidate(candidate: Candidate, o: Observation, supporte
     attachment_proximity: p.distance < 1.5 ? "at the person" : p.distance < 4.5 ? "nearby" : "farther along the surface",
     heading: relativeDirection(p.from, end, o.gaze),
     view_alignment: alignment(o.gaze[0], o.gaze[2]),
-    movement_alignment: Math.hypot(o.velocity[0], o.velocity[2]) > 0.6 ? alignment(o.velocity[0], o.velocity[2]) : "not moving horizontally",
+    movement_alignment: Math.hypot(o.velocity[0], o.velocity[2]) > MOVEMENT_INTENT_SPEED ? alignment(o.velocity[0], o.velocity[2]) : "not moving horizontally",
     vertical_change: heightWord(end[1] - p.from[1]),
     path_shape: path,
     surface_tilt: Math.abs(candidate.crossSlope ?? 0) > 0.02 ? "tilted across its width" : "level across its width",

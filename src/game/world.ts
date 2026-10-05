@@ -202,6 +202,13 @@ export function collisionBoxes(
   ];
 }
 
+/** Height of the collider's top plane at a world position, including ramp tilt. */
+export function supportHeight(box: StructureBox, p: Vec3) {
+  const local = boxCoordinates([p[0],0,p[2]],box);
+  const normalY = boxCoordinates([p[0],1,p[2]],box)[1] - local[1];
+  return Math.abs(normalY) > 0.01 ? (box.size[1] / 2 - local[1]) / normalY : box.position[1] + box.size[1] / 2;
+}
+
 export type MatterPose = { position: Vec3; scale: Vec3; yaw?: number };
 export function formationPose(
   site: Site,
@@ -244,18 +251,21 @@ export function smooth(t: number) {
   const c = Math.max(0, Math.min(1, t));
   return c * c * c * (c * (c * 6 - 15) + 10);
 }
+export const PLATFORM_DWELL_SECONDS = 1.5;
+export const PLATFORM_TRAVEL_SECONDS = 5;
+export const PLATFORM_HALF_CYCLE_SECONDS = PLATFORM_DWELL_SECONDS + PLATFORM_TRAVEL_SECONDS;
 export function platformOffset(site: Site, elapsed: number): Vec3 {
-  // A generous boarding dwell at either shore; zero velocity at both ends.
-  const period = 18,
+  // Brief boarding dwell; smooth acceleration and zero velocity at both docks.
+  const period = 2 * PLATFORM_HALF_CYCLE_SECONDS,
     phase = ((elapsed % period) + period) % period;
   const t =
-    phase < 3
+    phase < PLATFORM_DWELL_SECONDS
       ? 0
-      : phase < 9
-        ? smooth((phase - 3) / 6)
-        : phase < 12
+      : phase < PLATFORM_HALF_CYCLE_SECONDS
+        ? smooth((phase - PLATFORM_DWELL_SECONDS) / PLATFORM_TRAVEL_SECONDS)
+        : phase < PLATFORM_HALF_CYCLE_SECONDS + PLATFORM_DWELL_SECONDS
           ? 1
-          : 1 - smooth((phase - 12) / 6);
+          : 1 - smooth((phase - PLATFORM_HALF_CYCLE_SECONDS - PLATFORM_DWELL_SECONDS) / PLATFORM_TRAVEL_SECONDS);
   const { dx, ux, uz } = siteAxis(site);
   return [
     (dx - 2 * ux * (2.55 / Math.abs(uz))) * t,

@@ -5,6 +5,9 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { beginJevCall, completeJevCall, recordJevGameOutcome, startJevSession, recordJevSessionEvent } from "../src/server/jev-audit";
+import type { Observation } from "../src/game/decisions";
+import type { DecisionMotionEvidence } from "../src/game/decision-freshness";
+import { POST as recordOutcome } from "../src/app/api/decision/outcome/route";
 
 test("a live run keeps exact calls, outcomes, latency, tokens and a priced summary", async (t) => {
   const auditRoot = await mkdtemp(join(tmpdir(), "living-matter-audit-test-"));
@@ -39,6 +42,20 @@ test("a live run keeps exact calls, outcomes, latency, tokens and a priced summa
   await completeJevCall(failed, { providerRoundTripMs: 1600, error: { name: "APITimeoutError", status: null } });
   summary = JSON.parse(await readFile(summaryPath, "utf8"));
   assert.equal(summary.failed_calls, 1);
+  const before: Observation = { time: 1, position: [0,1,-25], velocity: [0,0,0], gaze: [1,0,0], grounded: true, activeStructure: "reach" };
+  const freshness: DecisionMotionEvidence = { before, after: { ...before, time: 1.3, velocity: [-4,0,0], gaze: [-1,0,0] } };
+  const auditEnvironment = ["NODE_ENV", "NEXT_PUBLIC_DECISION_BACKEND", "NEXT_PUBLIC_JEV_SESSION_AUDIT"];
+  const previousEnvironment = Object.fromEntries(auditEnvironment.map(key => [key, process.env[key]]));
+  Object.assign(process.env, { NODE_ENV: "development", NEXT_PUBLIC_DECISION_BACKEND: "jev", NEXT_PUBLIC_JEV_SESSION_AUDIT: "1" });
+  t.after(() => { for (const key of auditEnvironment) { if (previousEnvironment[key] === undefined) delete process.env[key]; else process.env[key] = previousEnvironment[key]; } });
+  const outcome = { sessionId, auditId: failed.callId, status: "discarded", reason: "behavior_changed", freshness };
+  const postOutcome = (body: unknown) => recordOutcome(new Request("http://localhost/api/decision/outcome", {
+    method: "POST", headers: { origin: "http://localhost", "content-type": "application/json" }, body: JSON.stringify(body),
+  }));
+  assert.equal((await postOutcome(outcome)).status, 200);
+  assert.equal((await postOutcome({ ...outcome, freshness: { after: { ...freshness.after, gaze: "look right" } } })).status, 400);
+  assert.deepEqual(JSON.parse(await readFile(join(failed.directory, "game-outcome.json"), "utf8")).freshness, freshness);
+  assert.equal("freshness" in await saved("jev-request.json"), false);
   assert.equal(summary.cost.estimated_total_usd, null);
   assert.equal(summary.cost.known_estimated_usd, 0.000058926);
   assert.equal(summary.cost.unknown_cost_calls, 1);

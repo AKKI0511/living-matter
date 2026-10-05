@@ -22,7 +22,7 @@ export default function PreviewNotice() {
   }, [unavailable, playing, hidden, dismissed]);
   if (!playing || !unavailable || hidden || dismissed) return null;
   return <aside className="preview-notice" aria-label="Preview mode">
-    <span role="status">High load · Playing in preview</span>
+    <span role="status">Live unavailable · Playing in preview</span>
     <button aria-label="Dismiss preview notice" aria-keyshortcuts="H" onPointerDown={e => { if (e.pointerType !== "mouse") { e.preventDefault(); setDismissed(true); e.currentTarget.blur(); } }} onClick={e => { setDismissed(true); e.currentTarget.blur(); }}><span className="desktop">Hide · H</span><span className="touch-copy">×</span></button>
   </aside>;
 }

@@ -1,4 +1,6 @@
 import { expect, test } from "./fixtures";
+import { go } from "./steering-helpers";
+import { sites } from "../../src/game/world";
 
 test("High keeps linear intermediate color and follows DPR changes at fixed CSS size", async ({ page }) => {
   test.skip(!!process.env.CI, "DPR and GPU resource checks run on local hardware");
@@ -39,21 +41,50 @@ test("High keeps linear intermediate color and follows DPR changes at fixed CSS 
   await cdp.detach();
 });
 
-test("Auto finishes a formation before switching effects and keeps drawing during the handoff", async ({ page }) => {
-  test.skip(!!process.env.CI, "Auto upgrade and frame checks run on local hardware");
+test("explicit High stays selected during movement and formation traversal", async ({ page }) => {
+  await page.goto("/play");
+  await page.getByLabel("Graphics", { exact: true }).selectOption("high");
+  await page.getByRole("button", { name: "Play", exact: true }).click();
+  await page.evaluate(() => {
+    window.__livingMatter!.teleport([0, 1, -23]);
+    window.__livingMatter!.formation(0, "weave");
+  });
+  await expect.poll(() => page.evaluate(() => (window.__livingMatter!.snapshot() as {
+    states: { phase: string }[];
+  }).states[0].phase)).toBe("active");
+  await go(page, [sites[0].end[0], sites[0].end[1], sites[0].end[2] - 2]);
+  const state = await page.evaluate(() => ({
+    ...window.__livingMatter!.snapshot() as { grounded: boolean; recoveries: number },
+    pipeline: window.__livingMatter!.renderInfo().pipeline,
+  }));
+  expect(state.grounded).toBe(true);
+  expect(state.recoveries).toBe(0);
+  expect(state.pipeline).not.toBeNull();
+});
+
+test("Auto prepares before Play and never introduces cold High effects during a formation", async ({ page }) => {
+  test.skip(!!process.env.CI, "Auto calibration and frame checks run on local hardware");
   await page.addInitScript(() => {
     const prototype = WebGL2RenderingContext.prototype;
     const draw = prototype.drawElementsInstanced;
+    const compile = prototype.compileShader;
+    let playingCompiles = 0;
     let worldDraws = 0;
-    const frames: { time: number; draws: number }[] = [];
+    const frames: { time: number; draws: number; high: boolean }[] = [];
     Object.assign(window, { __worldFrames: frames });
+    Object.assign(window, { __playingCompiles: () => playingCompiles });
+    prototype.compileShader = function(...args) {
+      if ((window.__livingMatter?.snapshot() as { phase: string } | undefined)?.phase === "playing") playingCompiles++;
+      return Reflect.apply(compile, this, args);
+    };
     prototype.drawElementsInstanced = function(...args) {
       worldDraws++;
       return Reflect.apply(draw, this, args);
     };
     const frame = () => {
       const runtime = window.__livingMatter?.snapshot() as { time: number; phase: string } | undefined;
-      if (runtime?.phase === "playing" && runtime.time > 8) frames.push({ time: runtime.time, draws: worldDraws });
+      if (runtime?.phase === "playing") frames.push({ time: runtime.time, draws: worldDraws,
+        high: !!window.__livingMatter?.renderInfo().pipeline });
       worldDraws = 0; requestAnimationFrame(frame);
     };
     requestAnimationFrame(frame);
@@ -61,22 +92,19 @@ test("Auto finishes a formation before switching effects and keeps drawing durin
   await page.goto("/play");
   await page.getByLabel("Graphics", { exact: true }).selectOption("auto");
   await page.getByRole("button", { name: "Play", exact: true }).click();
-  await page.waitForFunction(() => (window.__livingMatter!.snapshot() as { time: number }).time >= 10, undefined, { polling: "raf" });
-  await page.evaluate(() => window.__livingMatter!.formation(0, "weave"));
-  await page.waitForFunction(() => {
-    const state = window.__livingMatter!.snapshot() as { time: number; states: { since: number }[] };
-    return state.time - state.states[0].since >= 2;
-  }, undefined, { polling: "raf" });
-  expect(await page.evaluate(() => window.__livingMatter!.renderInfo().pipeline)).toBeNull();
+  await page.evaluate(() => { window.__livingMatter!.teleport([0, 1, -23]); window.__livingMatter!.formation(0, "weave"); });
   await expect.poll(() => page.evaluate(() => (window.__livingMatter!.snapshot() as { states: { phase: string }[] }).states[0].phase)).toBe("active");
-  await expect.poll(() => page.evaluate(() => window.__livingMatter!.renderInfo().pipeline)).not.toBeNull();
   await page.waitForFunction(() => (window.__livingMatter!.snapshot() as { time: number }).time > 16, undefined, { polling: "raf" });
-  const frames = await page.evaluate(() => (window as unknown as { __worldFrames: { time: number; draws: number }[] }).__worldFrames);
+  const frames = await page.evaluate(() => (window as unknown as { __worldFrames: { time: number; draws: number; high: boolean }[] }).__worldFrames);
   expect(frames.length).toBeGreaterThan(120);
+  expect(await page.evaluate(() => (window as unknown as { __playingCompiles: () => number }).__playingCompiles())).toBe(0);
+  let lowered = !frames[0].high;
   // Browser task scheduling may split a boundary, but an unready composer must
   // never leave a consecutive run of frames without drawing world geometry.
   let emptyRun = 0;
   for (const frame of frames) {
+    if (!frame.high) lowered = true;
+    if (lowered) expect(frame.high).toBe(false);
     emptyRun = frame.draws ? 0 : emptyRun + 1;
     expect(emptyRun).toBeLessThan(3);
   }

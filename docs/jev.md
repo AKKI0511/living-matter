@@ -1,46 +1,161 @@
 # How Jev reads movement
 
-Jev reads a short description of your surroundings, movement and recent attempts. It judges whether you want a way onward and chooses a reachable formation. The engine builds it and protects the surface beneath you.
+Jev interprets movement, gaze and recent actions to decide whether new walking space is wanted and which formation would help. It returns typed judgments; the game builds and validates the chosen surface.
 
-## A scene described in words
+```mermaid
+flowchart LR
+  Observe[Movement and surroundings] --> State[Semantic state]
+  Geometry[Reachable formations] --> Questions[Independent questions]
+  State --> Jev[Jev judgments]
+  Questions --> Jev
+  Jev --> Check[Intent and physical checks]
+  Check --> Matter[Reshape unused matter]
+  Matter --> Observe
+```
 
-Every request explains that a person explores separated walking surfaces above water, and that living matter is material that can become a walking surface or a moving deck. Directions follow the person's view. The model receives no screenshots or prior knowledge of the game.
+## State: the scene in words
 
-The current scene describes solid ground or formed material underfoot, movement, proximity to an edge, the gap or walking surface ahead, separate ground beyond a gap, and whether the view is held or changing. Recent events retain edge and view-height changes, turns, jumps and unsuccessful attempts. Repeated descriptions are removed; a recent failed traversal is retained when history is shortened.
+Jev receives text, with no screenshot or hidden knowledge of the world. Code translates geometry into facts such as a gap ahead, higher ground, or a view across the occupied walkway. State describes what is happening; questions define what to judge.
 
-All model-facing state, instructions and options contain semantic text. Coordinates, clocks, distances, angles, identifiers and quantities stay in code. Digit-free option labels map back to physical candidates on the server. A recursive guard rejects numeric values, digits, number words and measurement text before calling Jev. The API's model selector and returned probabilities remain transport metadata and outputs.
+Directions follow the current view. On matter, `view_to_walkway` distinguishes looking along it, diagonally across it, or toward its side. Recent behavior keeps only the latest transitions. Earlier views and completed attempts cannot describe the current direction or requested height.
 
-## What Jev is asked
+An example state for a held upward look at a gap:
 
-The independent questions share the scene and run together:
+```json
+{
+  "scene": "Separated ground above water; living matter reshapes into walkways or a moving deck.",
+  "directions": "Current directions use current view; history uses earlier views. Heights compare walking surfaces.",
+  "player_now": {
+    "support": "formed material",
+    "motion": "standing",
+    "position_on_support": "at the surface edge",
+    "facing_into": "gap without a continuous walking surface",
+    "ground_across_gap": "higher solid ground",
+    "view_height": "looking upward",
+    "view_to_walkway": "along the walkway",
+    "view_attention": "view held in the same direction"
+  },
+  "recent_behavior_oldest_to_newest": [
+    {
+      "support": "formed material",
+      "motion": "standing",
+      "position_on_support": "at the surface edge",
+      "facing_into": "gap without a continuous walking surface"
+    },
+    {
+      "support": "formed material",
+      "motion": "walking forward",
+      "position_on_support": "at the surface edge",
+      "facing_into": "gap without a continuous walking surface"
+    }
+  ],
+  "material_now": {
+    "state": "ready to walk on or ride",
+    "available_change": "Occupied support stays; unused material can reshape.",
+    "continuation": "Continuation elsewhere or unobserved"
+  }
+}
+```
 
-| Question | What it judges |
-| --- | --- |
-| action_needed | Whether movement or a recent attempt asks to continue across a gap. |
-| best_candidate | Assuming a way onward is wanted, which formation serves the attempted direction and height. |
-| branch_intent | At an edge of formed material, whether behavior asks for a new direction. |
-| height_intent | At that edge, whether behavior asks for a higher or lower surface. Included only when an upward or downward view is observed. |
+Coordinates, measurements, timestamps and engine identifiers stay in code. Model-facing state and questions contain semantic text only; a guard rejects numeric data before inference. The API model selector and returned probabilities are separate from that scene description.
 
-An isolated glance is different from turning at an edge and holding the new view. Walking sideways or backward can indicate a direction different from where you look. Each question states its own meaning and evidence; it cannot see another question's answer.
+## Questions: intent and a useful formation
 
-## Keeping useful formations available
+Questions share the state and run independently in the same request. A question cannot see another question's answer.
 
-Options describe walking or riding, their attachment, travel direction, alignment with movement and view, rising or falling, bends or turns, surface tilt, and where the surface leads. A short rising section remains a rise even when collision clearance shortens it.
+| Question | Primitive | Judgment |
+| --- | --- | --- |
+| `action_needed` | Noul | Does current behavior request new walking space? |
+| `best_candidate` | Choice | Assuming a new route is wanted, which formation serves current direction and height? |
+| `branch_intent` | Noul | Does movement or held view request departure from the occupied walkway? |
+| `height_intent` | Noul | Does a deliberate upward or downward view near an edge request ascent or descent? |
 
-Straight paths, climbs, descents, turning paths with arched support, broad side branches, tilted surfaces and moving decks remain distinguishable when physically available. The prompt gives straight or level paths no automatic preference. Whole-form families also remain distinct when supplied by the physical menu; this change does not add new geometry.
+The branch question is added at a matter edge or for a stopped, held view across it toward a gap. The height question is added for a sustained vertical look near an edge. Downward intent needs a deeper tilt, so looking at the walking surface does not repeatedly request descent.
 
-Shared facts are preserved once in the Choice instruction. Semantically equivalent options are grouped while retaining their physical candidates; code selects the nearest equivalent attachment. The semantic labels survive input reordering and stage renaming. Presentation order rotates across sessions and changed scenes, staying stable for an unchanged scene.
+The height question is:
 
-## Acting on the answer
+```json
+{
+  "type": "noul",
+  "instructions": "Does `player_now` indicate intent to ascend or descend?",
+  "criteria": {
+    "true": "Held upward/downward view at an edge toward a new route.",
+    "false": "Surveying; brief glance; following a route already offered."
+  }
+}
+```
 
-An uncertain request or an explicit no-match holds the current support. If intent is clear but probability is spread over comparable, aligned alternatives, code can choose among those alternatives rather than stall solely on low Choice concentration. It preserves an existing commitment when available and uses stable session variation among comparable fits otherwise. Directions opposed to the attempt and malformed probabilities are rejected.
+Choice options describe formation, attachment, direction, view and movement alignment, height, shape and destination. A rise describes the next surface; destination height describes eventual ground. Safe shapes and slopes can change independently of the path already occupied.
 
-These are application policy choices, with thresholds kept in code. They are starting values for gameplay evaluation, not accuracy guarantees. Forming material is held; the engine never retracts occupied support. Provider failures continue through preview automatically.
+This excerpt shows rising and level alternatives. The full menu includes the other physically available directions, heights and shapes:
 
-## Inspecting decisions
+```json
+{
+  "type": "choice",
+  "instructions": {
+    "question": "If new walking space is wanted, which formation best serves `player_now`?",
+    "direction": "Current movement; held view while stopped. Current direction and height override history; shape or slope needn't continue.",
+    "spatial_meaning": "vertical_change: next surface; destination_height: eventual ground.",
+    "shared_option_facts": {
+      "movement_alignment": "not moving horizontally",
+      "next_surface_ends_at": "open gap"
+    }
+  },
+  "criteria": {
+    "option_m": {
+      "formation": "walking path",
+      "attachment": "end of existing walking surface",
+      "starts_from": "ahead",
+      "attachment_proximity": "nearby",
+      "heading": "ahead",
+      "view_alignment": "aligned",
+      "vertical_change": "higher",
+      "path_shape": "straight"
+    },
+    "option_l": {
+      "formation": "walking path",
+      "attachment": "end of existing walking surface",
+      "starts_from": "ahead",
+      "attachment_proximity": "nearby",
+      "heading": "ahead",
+      "view_alignment": "aligned",
+      "vertical_change": "at similar height",
+      "path_shape": "straight"
+    },
+    "none": "No formation fits intended direction and height."
+  }
+}
+```
 
-The [development session recorder](jev-session-audits.md) saves exact inputs, answers and outcomes. An older recording with different questions or option meanings is marked `prompt_changed`; its answer is not silently recomposed against the new prompt. Human-labeled historical inputs remain exportable.
+The engine preserves straight paths, curves, climbs, descents, side exits and rides when safe. Equivalent options share a label while retaining their physical attachments. Facts shared across options appear once; decorative support details stay out. Option order rotates across sessions and changed scenes to reduce a persistent first-option preference.
 
-Implementation: [`decision-state.ts`](../src/game/decision-state.ts), [`semantic.ts`](../src/game/semantic.ts), [`decision-request.ts`](../src/server/decision-request.ts).
+## From judgments to living matter
 
-Official guidance: [state](https://docs.typesafe.ai/concepts/state), [Noul](https://docs.typesafe.ai/primitives/noul), [Choice](https://docs.typesafe.ai/primitives/choice), [independent speculative questions](https://docs.typesafe.ai/patterns/fan-out), [confidence](https://docs.typesafe.ai/confidence), and [Jev's semantic representations and option-order guidance](https://docs.typesafe.ai/model-jaggedness/jev-1.13).
+A Noul returns a yes/no probability. Choice returns a label, probabilities across the menu and confidence in their concentration. Confidence measures uncertainty, rather than proving that the player's intention was understood.
+
+For the upward scene, the rising option can produce this answer excerpt:
+
+```json
+{
+  "height_intent": { "type": "noul", "noul": 0.73 },
+  "best_candidate": {
+    "type": "choice",
+    "choice": "option_m",
+    "confidence": 0.95
+  }
+}
+```
+
+Code combines the intent judgments with the Choice. A credible climb or descent matching a positive height judgment can proceed even with level support ahead. A height judgment does not substitute another formation for Jev's actual selection.
+
+Clear choices are preserved. When probability is spread over comparable useful alternatives, stable weighted variation keeps formations varied. Credible curves and turns remain selected; during movement, walking variety stays among walking routes rather than becoming a wait for a ride. Jev can still select a moving deck.
+
+Before building, the engine checks current support, attachment, clearance and available matter. A level surface counts as already serving a route only when its height and extent match too. Occupied support stays intact; unused matter reshapes, and new surfaces catch landings during assembly. An occupied moving deck remains intact until shore.
+
+Unchanged offers and continuous support avoid unnecessary calls. A new direction, deliberate height look or unresolved attempt can request another judgment. Physics and rendering continue while the model responds; obsolete or unsafe replies cannot apply. Provider failures temporarily use Preview through the same physical checks.
+
+## Inspect and extend
+
+[Record decisions](jev-session-audits.md) to compare state, answers and actual outcomes, and add human intent labels for evaluation. The core implementation is [semantic.ts](../src/game/semantic.ts), [decision-state.ts](../src/game/decision-state.ts) and [decision-request.ts](../src/server/decision-request.ts).
+
+The method follows TypeSafe's [state guidance](https://docs.typesafe.ai/concepts/state), [Noul](https://docs.typesafe.ai/primitives/noul), [Choice](https://docs.typesafe.ai/primitives/choice) and [Jev prompting guidance](https://docs.typesafe.ai/model-jaggedness/jev-1.13).

@@ -103,11 +103,14 @@ export function availableCandidates(
         const direction: Vec3 = [0, 0, 0];
         direction[axis] = sign / (turn ? Math.SQRT2 : 1);
         direction[tangent] = turn / Math.SQRT2;
-        const route = [0, 6, 12].map(length => [from[0] + direction[0] * length, y, from[2] + direction[2] * length] as Vec3);
-        if (!clearMatterSection(route[0], route[1]) || !clearMatterSection(route[1], route[2])) continue;
-        departures.push({ id: `${owner.id}:explore:${islandIndex}:${edge}:${from[tangent]}:${turn}`,
-          siteId: owner.id, kind: "weave", route,
-          physical: { from, to: route[2], distance, span: 12, rise: 0, medium: "water", landing: false } });
+        // Edge exploration has height choices too, even away from an authored crossing.
+        for (const rise of [0, 1.2, -1.2]) {
+          const route = [0, 6, 12].map(length => [from[0] + direction[0] * length, y + rise * length / 6, from[2] + direction[2] * length] as Vec3);
+          if (!clearMatterSection(route[0], route[1]) || !clearMatterSection(route[1], route[2])) continue;
+          departures.push({ id: `${owner.id}:explore:${islandIndex}:${edge}:${from[tangent]}:${turn}${rise ? `:height:${rise}` : ""}`,
+            siteId: owner.id, kind: "weave", route,
+            physical: { from, to: route[2], distance, span: 12, rise: rise * 2, medium: "water", landing: false } });
+        }
       }
     }
   }

@@ -53,6 +53,7 @@ export type Intervention = {
 export interface DecisionSource {
   select(context: DecisionContext, signal: AbortSignal): Promise<Intervention>;
   reset?(): void;
+  commit?(candidateId: string, observation: Observation): void;
 }
 
 /** Disposable behavior policy. No stage names, ordering, progression or geometry construction. */
@@ -137,6 +138,9 @@ export class DecisionGate {
     this.pending?.abort();
     this.pending = null;
     this.source.reset?.();
+  }
+  commit(candidateId: string, observation: Observation | undefined) {
+    if (observation) this.source.commit?.(candidateId, observation);
   }
   async request(
     context: Omit<DecisionContext, "generation">,

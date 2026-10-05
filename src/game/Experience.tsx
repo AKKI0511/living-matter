@@ -24,7 +24,7 @@ function capturePointer() {
 function pause() { useGame.getState().setPhase("paused"); document.exitPointerLock?.(); }
 
 export default function Experience() {
-  const { phase, muted, quality, night, run, slow } = useGame();
+  const { phase, muted, quality, night, run, slow, graphicsReady } = useGame();
   const root = useRef<HTMLElement>(null);
   const fullscreen = useGameFullscreen(root);
   const [mounted, setMounted] = useState(false);
@@ -95,8 +95,8 @@ export default function Experience() {
         <p className="menu-name">Living Matter</p>
         <h1 aria-live="polite">{phase === "loading" ? "Loading…" : phase === "paused" ? "Paused" : phase === "complete" ? "Journey complete" : phase === "error" ? "The world couldn’t open." : "Ready to explore"}</h1>
         {phase === "loading" ? <p role="status">Loading…</p> : phase === "error" ? <><p>Try a browser with WebGL 2 enabled.</p><button className="primary" onClick={() => location.reload()}>Try again</button></> : <>
-          <button className="primary" onClick={phase === "complete" ? restart : begin}>{phase === "complete" ? "Play again" : phase === "paused" ? "Resume" : "Play"}</button>
-          {phase === "paused" && <button onClick={restart}>Restart</button>}
+          <button className="primary" disabled={!graphicsReady} aria-busy={!graphicsReady} onClick={phase === "complete" ? restart : begin}>{phase === "complete" ? "Play again" : phase === "paused" ? "Resume" : "Play"}</button>
+          {phase === "paused" && <button disabled={!graphicsReady} onClick={restart}>Restart</button>}
           <div className="settings">
             <button aria-pressed={!muted} onClick={() => useGame.getState().toggleMute()}>Sound {muted ? "off" : "on"}</button>
             <label>Graphics <select aria-label="Graphics" value={quality} onChange={e => useGame.getState().setQuality(e.target.value as Quality)}><option value="auto">Auto</option><option value="low">Low</option><option value="high">High</option></select></label>
