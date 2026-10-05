@@ -16,8 +16,10 @@ for (const x of [-6.4, -8.7]) {
     await go(page, first.from.map((v, i) => v * 0.4 + first.to[i] * 0.6));
     // This checks the shore seam, not which later branch a changing gaze asks
     // for while the other half is being recycled.
-    expect((await snapshot(page)).player[2]).toBeLessThan(-27);
-    expect((await snapshot(page)).recoveries).toBe(0);
+    const landed = await snapshot(page);
+    expect(landed.player[2]).toBeLessThan(first.from[2] - 1);
+    expect(landed.grounded).toBe(true);
+    expect(landed.recoveries).toBe(0);
   });
 }
 
