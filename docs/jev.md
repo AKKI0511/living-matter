@@ -1,179 +1,161 @@
-# How Jev makes matter feel alive
+# How Jev reads movement
 
-[Play](https://livingmatter.vercel.app) · [Local setup](development.md#choose-preview-or-jev) · [Architecture](architecture.md)
+Jev interprets movement, gaze and recent actions to decide whether new walking space is wanted and which formation would help. It returns typed judgments; the game builds and validates the chosen surface.
 
-Living Matter uses **Jev as a real-time intent interpreter**. It reads where you move, where you look and what you just attempted, then judges how the companion should help. Run toward a gap, hesitate at its edge, turn on a path or look toward higher ground. Those actions become evidence for the next formation.
+```mermaid
+flowchart LR
+  Observe[Movement and surroundings] --> State[Semantic state]
+  Geometry[Reachable formations] --> Questions[Independent questions]
+  State --> Jev[Jev judgments]
+  Questions --> Jev
+  Jev --> Check[Intent and physical checks]
+  Check --> Matter[Reshape unused matter]
+  Matter --> Observe
+```
 
-Jev is TypeSafe's [System One model](https://docs.typesafe.ai/concepts/system-one). It returns typed judgments and probabilities that the game can execute. Living Matter asks it to interpret behavior and select a physically available contribution. The engine builds the geometry, moves the pieces and protects the surface beneath you.
+## State: the scene in words
 
-## One crossing, end to end
+Jev receives text, with no screenshot or hidden knowledge of the world. Code translates geometry into facts such as a gap ahead, higher ground, or a view across the occupied walkway. State describes what is happening; questions define what to judge.
 
-Suppose you run toward the water, stop near the arrival terrace's edge and keep looking across. The engine knows that there is open space ahead and separate walkable ground beyond it. Your recent run distinguishes this pause from standing on a terrace and surveying the scenery.
+Directions follow the current view. On matter, `view_to_walkway` distinguishes looking along it, diagonally across it, or toward its side. Recent behavior keeps only the latest transitions. Earlier views and completed attempts cannot describe the current direction or requested height.
 
-The examples below use the game's actual serializers and question builder with a two-option subset of arrival-crossing candidates. State and questions are generated from that physical situation. The answer values are illustrative, not a recorded provider result.
-
-### 1. Describe the player's situation
-
-The browser observes position, velocity, view direction, grounded state and active support. [`semantic.ts`](../src/game/semantic.ts) turns those measurements into descriptions such as `running forward`, `at an edge` and `open air`. It also records events such as turning and stopping, jumping and landing, or falling and returning.
-
-[`decision-state.ts`](../src/game/decision-state.ts) keeps the present situation and up to four recent behavior changes. This is the state sent to Jev for our example.
+An example state for a held upward look at a gap:
 
 ```json
 {
+  "scene": "Separated ground above water; living matter reshapes into walkways or a moving deck.",
+  "directions": "Current directions use current view; history uses earlier views. Heights compare walking surfaces.",
   "player_now": {
-    "support": "permanent ground",
+    "support": "formed material",
     "motion": "standing",
-    "position_on_support": "near an edge",
-    "facing_into": "open air",
-    "surface_beyond_facing": "separate walkable ground at similar height",
-    "view_height": "looking roughly level"
+    "position_on_support": "at the surface edge",
+    "facing_into": "gap without a continuous walking surface",
+    "ground_across_gap": "higher solid ground",
+    "view_height": "looking upward",
+    "view_to_walkway": "along the walkway",
+    "view_attention": "view held in the same direction"
   },
-  "recent_behavior": [
+  "recent_behavior_oldest_to_newest": [
     {
-      "support": "permanent ground",
-      "motion": "running forward",
-      "facing_into": "open air"
+      "support": "formed material",
+      "motion": "standing",
+      "position_on_support": "at the surface edge",
+      "facing_into": "gap without a continuous walking surface"
+    },
+    {
+      "support": "formed material",
+      "motion": "walking forward",
+      "position_on_support": "at the surface edge",
+      "facing_into": "gap without a continuous walking surface"
     }
   ],
-  "matter_now": {
-    "state": "idle",
-    "player_supported_by_matter": false
+  "material_now": {
+    "state": "ready to walk on or ride",
+    "available_change": "Occupied support stays; unused material can reshape.",
+    "continuation": "Continuation elsewhere or unobserved"
   }
 }
 ```
 
-Jev receives structured descriptions, not screenshots or a stream of button presses. Precise coordinates, collider dimensions, session IDs and candidate IDs remain available to application code. Authored stage names and progression order stay out of the model's state. TypeSafe's [state guide](https://docs.typesafe.ai/concepts/state) explains the shared-state format.
+Coordinates, measurements, timestamps and engine identifiers stay in code. Model-facing state and questions contain semantic text only; a guard rejects numeric data before inference. The API model selector and returned probabilities are separate from that scene description.
 
-### 2. Offer paths that can exist
+## Questions: intent and a useful formation
 
-[`affordances.ts`](../src/game/affordances.ts) and [`weave.ts`](../src/game/weave.ts) generate reachable contributions. A candidate includes its endpoints, rise, attachment and formation kind. The engine computes distances and collision clearance before asking for selection.
+Questions share the state and run independently in the same request. A question cannot see another question's answer.
 
-The server describes each option relative to the player. In this example, `candidate_0` means the first rising section of a walkable route; `candidate_1` means a moving deck to the other shore. Shared attributes are removed from the option descriptions, and indistinguishable options are deduplicated while preserving their original indices.
+| Question | Primitive | Judgment |
+| --- | --- | --- |
+| `action_needed` | Noul | Does current behavior request new walking space? |
+| `best_candidate` | Choice | Assuming a new route is wanted, which formation serves current direction and height? |
+| `branch_intent` | Noul | Does movement or held view request departure from the occupied walkway? |
+| `height_intent` | Noul | Does a deliberate upward or downward view near an edge request ascent or descent? |
 
-### 3. Ask two focused questions together
+The branch question is added at a matter edge or for a stopped, held view across it toward a gap. The height question is added for a sustained vertical look near an edge. Downward intent needs a deeper tilt, so looking at the walking surface does not repeatedly request descent.
 
-The request contains `state` and a `questions` map. [`buildDecisionRequest`](../src/server/decision-request.ts) produces these exact questions for the example.
+The height question is:
 
 ```json
 {
-  "action_needed": {
-    "type": "noul",
-    "instructions": "Do `player_now` and `recent_behavior` show an attempt to continue beyond existing support?",
-    "criteria": {
-      "true": "Moving toward unsupported space, waiting there after an attempt, or turning toward it on matter.",
-      "false": "Existing support serves the current direction, or the player is looking around or retreating on ground without a traversal attempt."
+  "type": "noul",
+  "instructions": "Does `player_now` indicate intent to ascend or descend?",
+  "criteria": {
+    "true": "Held upward/downward view at an edge toward a new route.",
+    "false": "Surveying; brief glance; following a route already offered."
+  }
+}
+```
+
+Choice options describe formation, attachment, direction, view and movement alignment, height, shape and destination. A rise describes the next surface; destination height describes eventual ground. Safe shapes and slopes can change independently of the path already occupied.
+
+This excerpt shows rising and level alternatives. The full menu includes the other physically available directions, heights and shapes:
+
+```json
+{
+  "type": "choice",
+  "instructions": {
+    "question": "If new walking space is wanted, which formation best serves `player_now`?",
+    "direction": "Current movement; held view while stopped. Current direction and height override history; shape or slope needn't continue.",
+    "spatial_meaning": "vertical_change: next surface; destination_height: eventual ground.",
+    "shared_option_facts": {
+      "movement_alignment": "not moving horizontally",
+      "next_surface_ends_at": "open gap"
     }
   },
-  "best_candidate": {
-    "type": "choice",
-    "instructions": {
-      "question": "If a new section is needed, which reachable option best matches the player's current view and movement?",
-      "direction": "Prefer a reachable heading close to the current view when the player turns or pauses; use motion and recent behavior to disambiguate. Consider view height and side-rim attachments."
+  "criteria": {
+    "option_m": {
+      "formation": "walking path",
+      "attachment": "end of existing walking surface",
+      "starts_from": "ahead",
+      "attachment_proximity": "nearby",
+      "heading": "ahead",
+      "view_alignment": "aligned",
+      "vertical_change": "higher",
+      "path_shape": "straight"
     },
-    "criteria": {
-      "candidate_0": {
-        "player_use": "walk",
-        "vertical_change": "higher",
-        "length_units": "6.1",
-        "rise_units": "1.2",
-        "path_shape": "straight",
-        "ends_at": "open space"
-      },
-      "candidate_1": {
-        "player_use": "ride a moving deck",
-        "vertical_change": "at similar height",
-        "length_units": "24.4",
-        "rise_units": "0.0",
-        "ends_at": "ground"
-      },
-      "none": "No option serves that direction from a reachable attachment."
-    }
+    "option_l": {
+      "formation": "walking path",
+      "attachment": "end of existing walking surface",
+      "starts_from": "ahead",
+      "attachment_proximity": "nearby",
+      "heading": "ahead",
+      "view_alignment": "aligned",
+      "vertical_change": "at similar height",
+      "path_shape": "straight"
+    },
+    "none": "No formation fits intended direction and height."
   }
 }
 ```
 
-**Noul** returns the probability that help is needed. **Choice** selects an option and reports its probability distribution and confidence. The `none` option allows a judgment that the available contributions do not fit. See TypeSafe's [Noul](https://docs.typesafe.ai/primitives/noul) and [Choice](https://docs.typesafe.ai/primitives/choice) references.
+The engine preserves straight paths, curves, climbs, descents, side exits and rides when safe. Equivalent options share a label while retaining their physical attachments. Facts shared across options appear once; decorative support details stay out. Option order rotates across sessions and changed scenes to reduce a persistent first-option preference.
 
-Both questions evaluate the same state independently in one request. The Choice explicitly assumes that a new section is needed; application code decides whether to use it after reading the Noul. This [speculative fan-out](https://docs.typesafe.ai/patterns/fan-out) avoids a second round trip for selection.
+## From judgments to living matter
 
-Question IDs such as `action_needed` map answers back to code. The model sees the instructions and criteria; each question carries its own complete meaning.
+A Noul returns a yes/no probability. Choice returns a label, probabilities across the menu and confidence in their concentration. Confidence measures uncertainty, rather than proving that the player's intention was understood.
 
-The server's SDK call follows this structure.
-
-```ts
-import { TypeSafeClient } from "@typesafe-ai/sdk";
-import { buildDecisionRequest, composeDecision } from "@/server/decision-request";
-
-const jevRequest = buildDecisionRequest(context);
-const client = new TypeSafeClient({
-  timeout: 1600,
-  retry: { maxRetries: 0 },
-  logLevel: "off",
-});
-const response = await client.systemOne(
-  { model: "jev-1.13.0", ...jevRequest },
-  { signal: request.signal },
-);
-const intervention = composeDecision(context, response.answers);
-```
-
-The [API route](../src/app/api/decision/route.ts) handles validation, budget reservation and the server-only credential around this call. The [JavaScript SDK](https://docs.typesafe.ai/sdk/javascript) supplies the typed interface.
-
-### 4. Turn typed answers into an intervention
-
-An illustrative `answers` object could look like this.
+For the upward scene, the rising option can produce this answer excerpt:
 
 ```json
 {
-  "action_needed": { "type": "noul", "noul": 0.9 },
+  "height_intent": { "type": "noul", "noul": 0.73 },
   "best_candidate": {
     "type": "choice",
-    "choice": "candidate_0",
-    "confidence": 1,
-    "probabilities": { "candidate_0": 1, "candidate_1": 0, "none": 0 }
+    "choice": "option_m",
+    "confidence": 0.95
   }
 }
 ```
 
-The current policy requires an action probability of at least `0.6` and Choice confidence of at least `0.3`. A valid selection maps back to the original physical candidate. For this example, composition returns the following intervention.
+Code combines the intent judgments with the Choice. A credible climb or descent matching a positive height judgment can proceed even with level support ahead. A height judgment does not substitute another formation for Jev's actual selection.
 
-```json
-{ "candidateId": "reach:weave:1", "recheckAfterMs": 1800 }
-```
+Clear choices are preserved. When probability is spread over comparable useful alternatives, stable weighted variation keeps formations varied. Credible curves and turns remain selected; during movement, walking variety stays among walking routes rather than becoming a wait for a ride. Jev can still select a moving deck.
 
-The `1800` value hints when to reconsider selection. Assembly timing is controlled by the engine.
+Before building, the engine checks current support, attachment, clearance and available matter. A level surface counts as already serving a route only when its height and extent match too. Occupied support stays intact; unused matter reshapes, and new surfaces catch landings during assembly. An occupied moving deck remains intact until shore.
 
-Lower probabilities, insufficient confidence, `none` or an invalid selection produce a hold. Choice confidence describes how concentrated the option distribution is; it does not prove that the model understood the player correctly. The thresholds are application policy in [`decision-request.ts`](../src/server/decision-request.ts).
+Unchanged offers and continuous support avoid unnecessary calls. A new direction, deliberate height look or unresolved attempt can request another judgment. Physics and rendering continue while the model responds; obsolete or unsafe replies cannot apply. Provider failures temporarily use Preview through the same physical checks.
 
-### 5. Recheck, assemble and support
+## Inspect and extend
 
-The browser receives the intervention and rechecks the current situation. If you have turned away, restarted or moved beyond the candidate's valid attachment, the answer can expire before execution. The runtime also checks available halves, clearance, bounds and collision.
+[Record decisions](jev-session-audits.md) to compare state, answers and actual outcomes, and add human intent labels for evaluation. The core implementation is [semantic.ts](../src/game/semantic.ts), [decision-state.ts](../src/game/decision-state.ts) and [decision-request.ts](../src/server/decision-request.ts).
 
-An accepted contribution moves the available pieces into place. On a rolling route, the occupied 256-piece half remains beneath you while the free half rebuilds. The new surface becomes usable when assembly activates its support. Animation shows that physical state, including unfinished assembly.
-
-## Changing direction and asking for height
-
-At a matter edge, the request adds a `branch_intent` Noul with the instruction “Is the player asking the matter to branch toward a new direction from this edge, even if the current deck continues?” Its criteria distinguish movement or view off the side from continuing along the deck or looking around.
-
-Looking up or down at that edge also adds `height_intent`, asking “Is the player asking the matter to climb or descend from this edge?” Recent behavior and view height distinguish a height request from surveying the scene.
-
-These focused judgments join the same request. An action, branch or height probability of at least `0.6` can enable selection, still subject to Choice confidence and physical checks.
-
-| Player behavior | Evidence used | Possible contribution |
-| --- | --- | --- |
-| Run toward a gap, then wait | Open space ahead and a recent traversal attempt | A walkable section or moving deck |
-| Turn toward the side while on matter | Edge position, changed view and recent motion | A branch from a reachable rim |
-| Look upward at the edge after an attempt | View height and recent behavior | A rising section |
-| Reverse direction | Current heading, retreating motion and available attachments | A rebuilt route back |
-
-These are situations the policy evaluates, not a fixed mapping from gestures to formations. The offered geometry and model judgment determine the actual result.
-
-## Real-time play without frame-by-frame inference
-
-Movement and physics run at 60 Hz while observations are sampled at 5 Hz. Jev requests have a minimum 1.5-second application cooldown. Exact checks skip inference when continuous support already serves the current direction; unchanged decisions are cached. New behavior and options change the request signature. Jev interprets traversal intent while the engine keeps the world moving.
-
-Pause, restart and exit cancel pending selection, and late results are ignored. Provider failures preserve safe existing support and surface an unavailable status. Live mode never silently becomes Preview. Local Preview uses rules through the same selection interface and needs no provider.
-
-Math, collision and piece accounting stay in code. Compact state and explicit criteria keep the model's job focused, consistent with TypeSafe's [Jev 1.13 guidance](https://docs.typesafe.ai/model-jaggedness/jev-1.13).
-
-To examine real decisions, use the [development session recorder](jev-session-audits.md). It saves the exact request, provider answer and actual game outcome so a convincing animation can be checked against what Jev selected and what the engine applied.
+The method follows TypeSafe's [state guidance](https://docs.typesafe.ai/concepts/state), [Noul](https://docs.typesafe.ai/primitives/noul), [Choice](https://docs.typesafe.ai/primitives/choice) and [Jev prompting guidance](https://docs.typesafe.ai/model-jaggedness/jev-1.13).

@@ -1,26 +1,36 @@
 import { expect, type Page } from "./fixtures";
-import { sites, islands, PLAYER_RADIUS, WEAVE_END_CAP } from "../../src/game/world";
+import { sites, islands, PLAYER_RADIUS, WEAVE_END_CAP, structureBoxes, platformOffset, PLATFORM_HALF_CYCLE_SECONDS } from "../../src/game/world";
 
 type Bank = { from: number[]; to: number[]; version: number; crossSlope?: number };
 export const snapshot = (page: Page) => page.evaluate(() => window.__livingMatter!.snapshot() as {
-  player: number[]; grounded: boolean; recoveries: number; phase: string;
-  states: { phase: string }[]; weave: { revision: number; route: number[][]; banks: Bank[] } | null;
+  player: number[]; grounded: boolean; recoveries: number; phase: string; time: number; solidMatterColliders: number;
+  states: { phase: string; offset: number[] }[]; weave: { revision: number; route: number[][]; banks: Bank[] } | null;
 });
 
-export async function go(page: Page, target: number[], tolerance = 0.35) {
-  const until = Date.now() + 20_000;
+export async function go(page: Page, target: number[], tolerance = 0.35, platformIndex?: number) {
   await page.keyboard.down("w");
   try {
-    while (Date.now() < until) {
-      const state = await snapshot(page);
-      if (state.phase === "complete") return;
-      const p = state.player;
-      if (Math.hypot(p[0] - target[0], p[2] - target[2]) < tolerance) return;
-      await page.evaluate(yaw => window.__livingMatter!.look(yaw, 0), Math.atan2(-(target[0] - p[0]), -(target[2] - p[2])));
-      await page.waitForTimeout(65);
-    }
-    throw new Error(`Could not walk to ${JSON.stringify(target)}: ${JSON.stringify(await snapshot(page))}`);
+    // Steer in the browser's frame, rather than chasing stale protocol snapshots.
+    await page.waitForFunction(({ target, tolerance, platformIndex }) => {
+      const state = window.__livingMatter!.snapshot() as {
+        phase: string; player: number[]; states: { offset: number[] }[];
+      };
+      const offset = platformIndex === undefined ? [0, 0, 0] : state.states[platformIndex].offset;
+      const dx = target[0] + offset[0] - state.player[0], dz = target[2] + offset[2] - state.player[2];
+      if (state.phase === "complete" || Math.hypot(dx, dz) < tolerance) return true;
+      window.__livingMatter!.look(Math.atan2(-dx, -dz), 0);
+      return false;
+    }, { target, tolerance, platformIndex }, { polling: "raf", timeout: 20_000 });
   } finally { await page.keyboard.up("w"); }
+}
+
+export async function boardPlatform(page: Page, index: number, reverse = false) {
+  const offset = platformOffset(sites[index], reverse ? PLATFORM_HALF_CYCLE_SECONDS : 0);
+  await page.waitForFunction(({ index, offset }) => {
+    const state = (window.__livingMatter!.snapshot() as { states: { phase: string; offset: number[] }[] }).states[index];
+    return state.phase === "active" && Math.hypot(state.offset[0] - offset[0], state.offset[2] - offset[2]) < .2;
+  }, { index, offset }, { polling: "raf", timeout: 30_000 });
+  await go(page, structureBoxes(sites[index], "platform")[0].position, .4, index);
 }
 
 export async function cross(page: Page, index: number) {

@@ -17,3 +17,31 @@ export function frameSummary(samples: readonly number[]) {
   const sorted = [...samples].sort((a, b) => a - b);
   return { median: sorted[Math.floor(sorted.length * 0.5)] ?? 0, p95: sorted[Math.floor(sorted.length * 0.95)] ?? 0 };
 }
+
+/** One High trial per Auto selection; a sustained slowdown can lower it once. */
+export class QualityMonitor {
+  private elapsed = 0;
+  private samples: number[] = [];
+  private warming = true;
+  private settled = false;
+
+  sample(dt: number): "high" | "low" | null {
+    if (this.settled) return null;
+    this.elapsed += Math.min(dt, 0.5);
+    // First renders allocate buffers and finish shader compilation. They are
+    // preparation time, not a useful estimate of sustained GPU performance.
+    if (this.warming) {
+      if (this.elapsed >= 0.5) { this.warming = false; this.elapsed = 0; }
+      return null;
+    }
+    this.samples.push(Math.min(dt, 0.5) * 1000);
+    // A severely overloaded GPU must not spend half a minute collecting
+    // thirty frames just to discover that it needs Low.
+    if ((this.elapsed < 2 || this.samples.length < 30) &&
+      (this.elapsed < 4 || this.samples.length < 12)) return null;
+    const slow = frameSummary(this.samples).p95 > 24;
+    this.samples = []; this.elapsed = 0;
+    if (slow) this.settled = true;
+    return slow ? "low" : "high";
+  }
+}

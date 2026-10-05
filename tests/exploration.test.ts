@@ -152,3 +152,17 @@ test("the latest right-hand descent can turn toward the island from its outer ri
   assert.equal(options.bank, 1);
   assert.ok(options.candidates.some(c => c.physical!.to[0] < c.physical!.from[0] - 2));
 });
+
+test("an ascending occupied ramp offers rising and descending exits on both absolute sides",()=>{
+  const weave=createWeave([[0,1,-25],[0,2.5,-31],[0,4,-37]],0),occupied=weave.banks[0];
+  const options=weaveCandidates(weave,sites[0],[0,2.635,-28],5)!;
+  for(const side of [-90,90]) for(const rise of [-1.5,0,1.5]) {
+    const candidate=options.candidates.find(c=>c.attachment==="middle"&&c.turnDegrees===side&&c.physical!.rise===rise);
+    assert.ok(candidate,`${side} side with ${rise} rise`);
+    const copy=structuredClone(weave);
+    applySteeringCandidate(copy,options.bank,candidate,5);
+    assert.deepEqual(copy.banks[0],occupied);
+    assert.ok(bankProgress(copy.banks[0],[0,2.635,-28]).supported);
+  }
+  assert.ok(options.candidates.length<=16);
+});

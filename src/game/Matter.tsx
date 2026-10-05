@@ -25,14 +25,18 @@ import {
   collisionBoxes,
   formationPose,
   platformOffset,
+  PLATFORM_HALF_CYCLE_SECONDS,
   sites,
+  supportHeight,
+  boxCoordinates,
+  PLAYER_RADIUS,
 } from "./world";
-import { assemblyProgress, angleBlend } from "./assembly";
+import { assemblyProgress, angleBlend, assemblySupportsPlayer, assemblyDetour, type AssemblyContact } from "./assembly";
 import { formMatter, semanticSnapshot, currentObservation, decisionObservations, type Runtime } from "./runtime";
 import { availableCandidates, onPermanentGround } from "./affordances";
 import { sound } from "./audio";
 import { reportDecisionOutcome } from "./decision-audit-client";
-import { decisionMotionCurrent, samePhysicalCandidate } from "./decision-freshness";
+import { decisionMotionCurrent, samePhysicalCandidate, type DecisionMotionEvidence } from "./decision-freshness";
 import { useGame } from "./store";
 import {
   applyWeave,
@@ -41,6 +45,7 @@ import {
   bankProgress,
   weaveCandidates,
   weavePose,
+  weaveServesRoute,
   WEAVE_SECONDS,
   type WeaveBank,
 } from "./weave";
@@ -51,7 +56,9 @@ export function Matter({ runtime }: { runtime: Runtime }) {
     body = useRef<RapierRigidBody>(null);
   const colliders = useRef<(RapierCollider | null)[]>([]);
   const weaveColliders = useRef<(RapierCollider | null)[]>([]);
+  const colliderBanks = useRef<(WeaveBank | null)[]>([null, null]);
   const bankVersions = useRef([-1, -1]);
+  const landingContacts = useRef(new Map<number, AssemblyContact & { since: number }>());
   const bankPoses = useRef<
     ({
       source: WeaveBank;
@@ -145,20 +152,35 @@ export function Matter({ runtime }: { runtime: Runtime }) {
           ? platformOffset(
               sites[index!],
               (state.phase === "active" ? runtime.time - state.rideSince : 0) +
-                (state.reverse ? 9 : 0),
+                (state.reverse ? PLATFORM_HALF_CYCLE_SECONDS : 0),
             )
           : [0, 0, 0];
       if (state.phase === "forming") state.previousOffset = [...state.offset];
     }
     runtime.solidColliderHandles.clear();
+    const admit = (c: RapierCollider, top: number, forming: boolean, since: number, within: boolean) => {
+      if (!forming) { landingContacts.current.delete(c.handle); return true; }
+      if (!within) return false;
+      let contact = landingContacts.current.get(c.handle);
+      if (!contact || contact.since !== since) {
+        contact = { since, above: false, landed: false };
+        landingContacts.current.set(c.handle, contact);
+      }
+      return assemblySupportsPlayer(top, runtime, contact);
+    };
     colliders.current.forEach((c, i) => {
       if (!c) return;
       runtime.matterColliderHandles.add(c.handle);
+      const point = state ? [runtime.player[0] - state.offset[0], runtime.player[1], runtime.player[2] - state.offset[2]] as const : runtime.player;
+      const top = supportHeight(boxes[i], [...point]);
+      const local = boxCoordinates([point[0], top, point[2]], boxes[i]);
       const enabled =
-        state?.phase === "active" &&
+        (state?.phase === "active" || state?.phase === "forming") &&
         state.kind !== "weave" &&
         boxes[i].index === index &&
-        boxes[i].kind === state.kind;
+        boxes[i].kind === state.kind &&
+        admit(c, top + state.offset[1], state.phase === "forming", state.since,
+          Math.abs(local[0]) <= boxes[i].size[0] / 2 + PLAYER_RADIUS && Math.abs(local[2]) <= boxes[i].size[2] / 2 + PLAYER_RADIUS);
       c.setEnabled(enabled);
       if (enabled) runtime.solidColliderHandles.add(c.handle);
     });
@@ -166,12 +188,14 @@ export function Matter({ runtime }: { runtime: Runtime }) {
       if (!c) return;
       runtime.matterColliderHandles.add(c.handle);
       const bank = state?.kind === "weave" ? runtime.weave?.banks[i] : null;
+      const progress = bank ? bankProgress(bank, runtime.player) : null;
       const enabled =
         !!bank &&
-        state?.phase === "active" &&
-        runtime.time - bank.since >= WEAVE_SECONDS;
+        (state?.phase === "active" || state?.phase === "forming") &&
+        admit(c, progress!.top, state.phase === "forming" || runtime.time - bank.since < WEAVE_SECONDS, bank.since,
+          progress!.across <= 2.4 + PLAYER_RADIUS && progress!.t >= -0.05 && progress!.t <= 1.05);
       c.setEnabled(enabled);
-      if (bank) {
+      if (bank && colliderBanks.current[i] !== bank) {
         const g = bankGeometry(bank);
         const alongSlope = g.rise / g.run, crossSlope = bank.crossSlope ?? 0;
         const ux = g.dx / g.run, uz = g.dz / g.run;
@@ -190,6 +214,7 @@ export function Matter({ runtime }: { runtime: Runtime }) {
           z: (bank.from[2] + bank.to[2]) / 2 - bankNormal.z * 0.15,
         });
         c.setRotationWrtParent(bankQuaternion);
+        colliderBanks.current[i] = bank;
       }
       if (enabled) runtime.solidColliderHandles.add(c.handle);
     });
@@ -250,7 +275,7 @@ export function Matter({ runtime }: { runtime: Runtime }) {
         bankVersions.current[bankIndex] = bank.version;
       }
       const recycled = !!bank && bank.version > 0;
-      const ready = !state || (state.phase === "active" && (!bank || runtime.solidColliderHandles.has(weaveColliders.current[bankIndex]?.handle ?? -1)));
+      const ready = !state || (state.phase === "active" && (!bank || runtime.time - bank.since >= WEAVE_SECONDS));
       const t = assemblyProgress(recycled ? runtime.time - bank.since : elapsed, recycled ? WEAVE_SECONDS : duration, i, ready);
       const pose = bank
         ? bankPoses.current[bankIndex]!.poses[i % 256]
@@ -259,26 +284,17 @@ export function Matter({ runtime }: { runtime: Runtime }) {
           : null;
       const wave =
         Math.sin(runtime.time * 0.8 + Math.floor(i / 64) * 0.3) * 0.055;
-      const target = pose
-        ? [
-            pose.position[0] + state!.offset[0],
-            pose.position[1] + state!.offset[1],
-            pose.position[2] + state!.offset[2],
-            ...pose.scale,
-          ]
-        : [
-            companion[0] + ((i % 8) - 3.5) * 0.36,
-            companion[1] + (Math.floor(i / 64) - 3.5) * 0.36 + wave,
-            companion[2] + ((Math.floor(i / 8) % 8) - 3.5) * 0.36,
-            0.32,
-            0.32,
-            0.32,
-          ];
       const arc = Math.sin(t * Math.PI);
-      for (let a = 0; a < 6; a++)
-        live[j + a] = origin[j + a] + (target[a] - origin[j + a]) * t;
+      for (let a = 0; a < 6; a++) {
+        const target = pose ? (a < 3 ? pose.position[a] + state!.offset[a] : pose.scale[a - 3])
+          : a >= 3 ? 0.32 : companion[a] + (a === 0 ? ((i % 8) - 3.5) * 0.36
+            : a === 1 ? (Math.floor(i / 64) - 3.5) * 0.36 + wave
+            : ((Math.floor(i / 8) % 8) - 3.5) * 0.36);
+        live[j + a] = origin[j + a] + (target - origin[j + a]) * t;
+      }
       live[j + 1] += arc * (2.5 + (i % 8) * 0.12);
-      dummy.position.set(live[j], live[j + 1], live[j + 2]);
+      const detour = assemblyDetour(live[j], live[j + 1], live[j + 2], p, t, i);
+      dummy.position.set(detour[0], detour[1], detour[2]);
       dummy.scale.set(live[j + 3], live[j + 4], live[j + 5]);
       const r = i * 3;
       rotation[r] = originRotation[r] * (1 - t) + arc * Math.sin(i) * 0.45;
@@ -310,7 +326,9 @@ export function Matter({ runtime }: { runtime: Runtime }) {
       !onPermanentGround(p)
     ) {
       const weave = runtime.weave;
-      const options = weaveCandidates(weave, sites[index!], p, runtime.time);
+      const observation = currentObservation(runtime);
+      const travel = observation && Math.hypot(observation.velocity[0],observation.velocity[2]) > 0.6 ? observation.velocity : observation?.gaze;
+      const options = weaveCandidates(weave, sites[index!], p, runtime.time, travel);
       runtime.diagnostics.decision = {
         reason: options ? "weave_candidates" : "no_recyclable_weave_section",
         time: runtime.time,
@@ -341,6 +359,7 @@ export function Matter({ runtime }: { runtime: Runtime }) {
         .then((result) => {
           let outcome: "applied" | "held" | "discarded" = result.gateStatus === "hold" ? "held" : "discarded";
           let reason = result.gateStatus ?? "state_or_geometry_changed";
+          let freshness: DecisionMotionEvidence | undefined;
           try {
           if (
             !result.valid ||
@@ -351,10 +370,14 @@ export function Matter({ runtime }: { runtime: Runtime }) {
             !runtime.grounded ||
             runtime.revision !== revision ||
             weave.revision !== bankRevision
-          )
+          ) {
+            reason = !runtime.grounded ? "player_airborne" : runtime.revision !== revision ? "matter_replaced" : weave.revision !== bankRevision ? "continuation_replaced" : runtime.disposed || useGame.getState().phase !== "playing" ? "run_inactive" : result.gateStatus ?? "invalid_candidate";
             return;
-          if (runtime.recoveries !== recoveries || !decisionMotionCurrent(requestObservation, currentObservation(runtime))) {
+          }
+          const responseObservation = currentObservation(runtime);
+          if (runtime.recoveries !== recoveries || !decisionMotionCurrent(requestObservation, responseObservation, result.candidate ?? undefined)) {
             reason = runtime.recoveries !== recoveries ? "player_recovered" : "behavior_changed";
+            freshness = { before: requestObservation, after: responseObservation };
             return;
           }
           const fresh = weaveCandidates(
@@ -362,13 +385,16 @@ export function Matter({ runtime }: { runtime: Runtime }) {
             sites[index!],
             runtime.player,
             runtime.time,
+            travel,
           );
           if (
             !fresh ||
             fresh.bank !== options.bank ||
             !fresh.candidates.some((c) => samePhysicalCandidate(result.candidate!, c))
-          )
+          ) {
+            reason = !fresh ? "no_recyclable_section" : fresh.bank !== options.bank ? "reusable_section_changed" : "candidate_geometry_changed";
             return;
+          }
           if (result.candidate.weaveSegment !== undefined) applySteeringCandidate(weave, fresh.bank, result.candidate, runtime.time);
           else applyWeave(
             weave,
@@ -378,6 +404,7 @@ export function Matter({ runtime }: { runtime: Runtime }) {
             runtime.time,
           );
           runtime.activeCandidateId = result.candidate.id;
+          runtime.gate.commit(result.candidate.id, currentObservation(runtime));
           runtime.physicalHistory.clear();
           runtime.assistance.push({
             time: runtime.time,
@@ -389,7 +416,7 @@ export function Matter({ runtime }: { runtime: Runtime }) {
           outcome = "applied";
           reason = "recycled_unoccupied_section";
           } finally {
-            reportDecisionOutcome(runtime.sessionId, result.auditId, result.browserRoundTripMs, outcome, reason);
+            reportDecisionOutcome(runtime.sessionId, result.auditId, result.browserRoundTripMs, outcome, reason, freshness);
           }
         });
       return;
@@ -434,6 +461,7 @@ export function Matter({ runtime }: { runtime: Runtime }) {
       .then((result) => {
         let outcome: "applied" | "retracted" | "held" | "discarded" = result.gateStatus === "hold" ? "held" : "discarded";
         let reason = result.gateStatus ?? "state_or_geometry_changed";
+        let freshness: DecisionMotionEvidence | undefined;
         try {
         if (
           !result.valid ||
@@ -443,36 +471,32 @@ export function Matter({ runtime }: { runtime: Runtime }) {
           !runtime.grounded ||
           !onPermanentGround(runtime.player) ||
           (state && semanticSnapshot(runtime)?.matter_now.player_supported_by_matter)
-        )
+        ) {
+          reason = !runtime.grounded ? "player_airborne" : !onPermanentGround(runtime.player) ? "player_left_ground" : runtime.revision !== revision ? "matter_replaced" : runtime.disposed || useGame.getState().phase !== "playing" ? "run_inactive" : result.gateStatus ?? "player_on_matter";
           return;
-        if (runtime.recoveries !== recoveries || !decisionMotionCurrent(requestObservation, currentObservation(runtime))) {
+        }
+        const responseObservation = currentObservation(runtime);
+        if (runtime.recoveries !== recoveries || !decisionMotionCurrent(requestObservation, responseObservation, result.candidate ?? undefined)) {
           reason = runtime.recoveries !== recoveries ? "player_recovered" : "behavior_changed";
+          freshness = { before: requestObservation, after: responseObservation };
           return;
         }
         const choice = result.candidate;
         const valid = choice
           ? availableCandidates(runtime.player).find((c) => c.id === choice.id)
           : null;
-        if (choice && (!valid || !samePhysicalCandidate(choice, valid))) return;
+        if (choice && (!valid || !samePhysicalCandidate(choice, valid))) { reason = "candidate_geometry_changed"; return; }
         if (
           state &&
           choice?.siteId === sites[index!].id &&
           choice.kind === state.kind &&
           (state.kind !== "weave" ||
-            runtime.weave?.banks.some(
-              (b) =>
-                [b.from, b.to].some((endpoint, endIndex) => {
-                  if (Math.hypot(endpoint[0] - choice.physical!.from[0], endpoint[2] - choice.physical!.from[2]) >= 1.6) return false;
-                  const other = endIndex ? b.from : b.to, next = choice.route?.[1] ?? choice.physical!.to;
-                  const dx = other[0] - endpoint[0], dz = other[2] - endpoint[2];
-                  const nx = next[0] - choice.physical!.from[0], nz = next[2] - choice.physical!.from[2];
-                  return (dx * nx + dz * nz) / (Math.hypot(dx, dz) * Math.hypot(nx, nz)) > 0.9;
-                }),
-            ))
+            (runtime.weave && weaveServesRoute(runtime.weave, choice)))
         )
         {
           outcome = "held";
           reason = "existing_form_sufficient";
+          if (runtime.activeCandidateId) runtime.gate.commit(runtime.activeCandidateId, currentObservation(runtime));
           return;
         }
         if (state) {
@@ -516,7 +540,7 @@ export function Matter({ runtime }: { runtime: Runtime }) {
           reason = "no_intervention";
         }
         } finally {
-          reportDecisionOutcome(runtime.sessionId, result.auditId, result.browserRoundTripMs, outcome, reason);
+          reportDecisionOutcome(runtime.sessionId, result.auditId, result.browserRoundTripMs, outcome, reason, freshness);
         }
       });
   });

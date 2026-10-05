@@ -44,6 +44,18 @@ export function createWeave(route: Vec3[], time: number): Weave {
     })) as [WeaveBank, WeaveBank],
   };
 }
+/** Sharing a heading does not make a level surface serve a climb or descent. */
+export function weaveServesRoute(weave: Weave, candidate: Candidate) {
+  if (!candidate.physical) return false;
+  const route = candidate.route ?? [candidate.physical.from, candidate.physical.to];
+  return route.length >= 2 && route.slice(1).every((to, index) => weave.banks.some(bank =>
+    Math.abs((bank.crossSlope ?? 0) - (candidate.crossSlope ?? 0)) < 0.025 &&
+    [route[index], to].every(point => {
+      const progress = bankProgress(bank, point);
+      return progress.t >= -0.05 && progress.t <= 1.05 && progress.across < 1.6 &&
+        Math.abs(point[1] + 0.06 - progress.top) < 0.18;
+    })));
+}
 export function bankGeometry(bank: WeaveBank) {
   const dx = bank.to[0] - bank.from[0],
     dz = bank.to[2] - bank.from[2];
@@ -68,6 +80,7 @@ export function bankProgress(bank: WeaveBank, p: Vec3) {
   return {
     t,
     across,
+    top,
     supported:
       t >= -(WEAVE_END_CAP + PLAYER_RADIUS) / run &&
       t <= 1 + (WEAVE_END_CAP + PLAYER_RADIUS) / run &&
@@ -81,6 +94,7 @@ export function weaveCandidates(
   site: Site,
   p: Vec3,
   time: number,
+  travel?: Vec3,
 ): { bank: number; segment: number; candidates: Candidate[] } | null {
   // The occupied half stays protected even at its tip or side rim. Requiring
   // the capsule to be fully inside its centre leaves a no-decision strip where
@@ -96,7 +110,7 @@ export function weaveCandidates(
   // At a shared junction both halves can support the capsule. Wait until the
   // player has cleared it rather than recycling another occupied surface.
   if (bankProgress(weave.banks[free], p).supported) return null;
-  if (site.steering) return steeringCandidates(weave, site, occupied, p);
+  if (site.steering) return steeringCandidates(weave, site, occupied, p, travel);
   const missing = [current.segment + 1, current.segment - 1].find(
     (s) => s >= 0 && s < 4 && s !== weave.banks[free].segment,
   );
@@ -142,7 +156,7 @@ function groundAt(p: Vec3, clearance = 0.4) {
 }
 
 /** Both joints and the side of the occupied section can seed a bounded new heading. */
-function steeringCandidates(weave: Weave, site: Site, occupied: number, p: Vec3) {
+function steeringCandidates(weave: Weave, site: Site, occupied: number, p: Vec3, travel?: Vec3) {
   const bank = weave.banks[occupied], free = 1 - occupied;
   const candidates: Candidate[] = [];
   const seen = new Set<string>();
@@ -165,9 +179,8 @@ function steeringCandidates(weave: Weave, site: Site, occupied: number, p: Vec3)
     const sign = port.attachment === "near end" ? -1 : 1;
     const side = "side" in port ? port.side : 0;
     const dx = side ? -uz * side : sign * ux, dz = side ? ux * side : sign * uz;
-    const surfaceRise = (gradientX * dx + gradientZ * dz) * 6;
     const targets: { point: Vec3; turnDegrees: number }[] =
-      (side ? [Math.max(-1.5, Math.min(1.5, surfaceRise))] : [0, 1.5, -1.5]).map(rise => ({
+      [0, 1.5, -1.5].map(rise => ({
         point: [port.point[0] + dx * 6, port.point[1] + rise, port.point[2] + dz * 6],
         turnDegrees: side ? side * 90 : 0,
       }));
@@ -176,7 +189,7 @@ function steeringCandidates(weave: Weave, site: Site, occupied: number, p: Vec3)
     if (!side) for (const turn of [-1, 1]) {
       const tx = (dx - dz * turn * 0.7) / Math.sqrt(1 + 0.7 ** 2);
       const tz = (dz + dx * turn * 0.7) / Math.sqrt(1 + 0.7 ** 2);
-      for (const rise of port.attachment === "far end" ? [0, 1.5] : [0]) {
+      for (const rise of [0, 1.5, -1.5]) {
         targets.push({ point: [port.point[0] + tx * 6, port.point[1] + rise, port.point[2] + tz * 6], turnDegrees: turn * 35 });
       }
     }
@@ -199,6 +212,14 @@ function steeringCandidates(weave: Weave, site: Site, occupied: number, p: Vec3)
     }
     for (const target of targets) {
       const proposed = target.point;
+      // Descending below a nearby shore from its height creates a cliff dead end.
+      if (proposed[1] < port.point[1] && landings.some(landing => {
+        const lx = landing[0] - port.point[0], lz = landing[2] - port.point[2];
+        const tx = proposed[0] - port.point[0], tz = proposed[2] - port.point[2];
+        const distance = Math.hypot(lx,lz), run = Math.hypot(tx,tz);
+        return landing[1] >= port.point[1] - 0.12 && proposed[1] < landing[1] - 0.12 &&
+          distance < run + 3 && (lx*tx+lz*tz)/(distance*run || 1) > 0.8;
+      })) continue;
       // An end connection must leave that end. A landing projected back through
       // the occupied deck duplicates its support and traps both halves in use.
       // Side turns use the rim ports; reverse travel uses the opposite end.
@@ -217,8 +238,8 @@ function steeringCandidates(weave: Weave, site: Site, occupied: number, p: Vec3)
         // A long low ramp can run into a cliff before gaining enough height.
         // Preserve the ramp's grade when shortening it before a cliff. Keeping
         // the full rise on a short segment creates an unwalkable steep step.
-        // Side joins retain their original plane and overlap.
-        if (side) continue;
+        // Side exits can shorten too; their grade, width plane and rim overlap
+        // remain intact. A nearby obstacle need not remove the whole direction.
         const shorter = [3, 1.5, 1].filter(length => length < span).map(length => [
           port.point[0] + (proposed[0] - port.point[0]) * length / span,
           port.point[1] + (proposed[1] - port.point[1]) * length / span,
@@ -242,12 +263,17 @@ function steeringCandidates(weave: Weave, site: Site, occupied: number, p: Vec3)
       });
     }
   }
-  // Keep a balanced physical menu under the request's sixteen-option budget.
+  // Keep both sides' height choices. The end facing travel gets its full menu;
+  // unused space includes the other end. This is physical coverage, not a veto
+  // on the model's selected direction, shape or height.
+  const forward = travel ? travel[0] * ux + travel[2] * uz >= 0 :
+    Math.hypot(p[0]-bank.to[0],p[2]-bank.to[2]) <= Math.hypot(p[0]-bank.from[0],p[2]-bank.from[2]);
+  const preferred = forward ? "far end" : "near end", other = forward ? "near end" : "far end";
   const balanced = [
-    ...candidates.filter(c => c.attachment === "far end").slice(0, 8),
-    ...candidates.filter(c => c.attachment === "near end").slice(0, 6),
-    ...candidates.filter(c => c.attachment === "middle").slice(0, 2),
-  ];
+    ...candidates.filter(c => c.attachment === "middle"),
+    ...candidates.filter(c => c.attachment === preferred).slice(0, 9),
+    ...candidates.filter(c => c.attachment === other),
+  ].slice(0,16);
   return balanced.length ? { bank: free, segment: bank.segment + 1, candidates: balanced } : null;
 }
 

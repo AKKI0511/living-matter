@@ -12,6 +12,7 @@ import { PhysicalHistory, describeCandidate, describePhysical, describeMatter, r
 import {
   buildDecisionRequest,
   composeDecision,
+  decisionOptions,
   decisionSchema,
 } from "../src/server/decision-request";
 import {
@@ -19,7 +20,7 @@ import {
   weaveCandidates, weaveRoute,
 } from "../src/game/weave";
 import { sites, type Vec3 } from "../src/game/world";
-import { decisionState } from "../src/game/decision-state";
+import { assertSemanticPrompt, decisionState } from "../src/game/decision-state";
 
 const observation = (position: Vec3, motion: Vec3, gaze: Vec3, time: number, grounded = true): Observation => ({
   time, position, velocity: motion, gaze, grounded, activeStructure: null,
@@ -49,13 +50,20 @@ function reachContext() {
   });
 }
 type Answers = Parameters<typeof composeDecision>[1];
-function answers(action = 0.9, selected = "candidate_0", confidence = 0.8, abandonment?: number): Answers {
+function answers(action = 0.9, selected = "candidate_0", confidence = 0.8, abandonment?: number, context = reachContext()): Answers {
+  const options = decisionOptions(context);
+  const index = /^candidate_(\d+)$/.exec(selected);
+  const chosen = index ? options.find(option => option.candidates.some(candidate => candidate.id === context.candidates[Number(index[1])]?.id))?.label ?? "option_unknown" : selected;
+  const labels = [...options.map(option => option.label), "none"];
+  const questions = buildDecisionRequest(context).questions;
   return {
     action_needed: { type: "noul", noul: action },
     best_candidate: {
-      type: "choice", choice: selected, confidence,
-      probabilities: { candidate_0: selected === "candidate_0" ? 0.9 : 0.1, candidate_1: selected === "candidate_1" ? 0.9 : 0.1 },
+      type: "choice", choice: chosen, confidence,
+      probabilities: Object.fromEntries(labels.map(label => [label, label === chosen ? 0.9 : 0.1 / (labels.length - 1)])),
     },
+    ...(questions.branch_intent ? { branch_intent: { type: "noul", noul: 0 } } : {}),
+    ...(questions.height_intent ? { height_intent: { type: "noul", noul: 0 } } : {}),
     ...(abandonment === undefined ? {} : { abandoned_current: { type: "noul", noul: abandonment } }),
   } as Answers;
 }
@@ -100,8 +108,8 @@ test("Jev receives one action Noul and one candidate Choice with no authored dir
   assert.equal(request.questions.best_candidate.type, "choice");
   const criteria = request.questions.best_candidate.criteria as Record<string, Record<string, string>>;
   assert.ok(Object.keys(criteria).length >= 2);
-  assert.ok(Object.values(criteria).some((c) => c.player_use === "walk"));
-  assert.ok(Object.values(criteria).some((c) => c.player_use === "ride a moving deck"));
+  assert.ok(Object.values(criteria).some((c) => c.formation === "walking path"));
+  assert.ok(Object.values(criteria).some((c) => c.formation === "moving deck"));
   assert.equal(JSON.stringify(request).includes('"reach"'), false);
   assert.equal(JSON.stringify(request).includes("span"), false);
 });
@@ -109,7 +117,7 @@ test("Jev receives one action Noul and one candidate Choice with no authored dir
 test("thresholds hold uncertainty and unused matter, and act on a clear Choice", () => {
   const context = reachContext();
   assert.equal(composeDecision(context, answers(0.59)).hold, true);
-  assert.equal(composeDecision(context, answers(0.9, "candidate_0", 0.29)).hold, true);
+  assert.equal(composeDecision(context, answers(0.9, "candidate_0", 0.29)).candidateId, context.candidates[0].id);
   assert.equal(composeDecision(context, answers(0.9, "candidate_1")).candidateId, context.candidates[1].id);
   assert.equal(composeDecision(context, answers(0.9, "candidate_99")).hold, true);
   const existing = decisionSchema.parse({ ...context, current: { candidateId: context.candidates[0].id, phase: "active" }, semantic: { ...context.semantic, matter_now: { state: "active", player_supported_by_matter: false } } });
@@ -129,19 +137,21 @@ test("a side-rim branch can be chosen independently of forward traversal need", 
     matter_now: { state: "active", player_supported_by_matter: true },
   } });
   assert.equal(buildDecisionRequest(context).questions.branch_intent.type, "noul");
-  const judgment = { ...answers(0.35, "candidate_0", 0.8), branch_intent: { type: "noul", noul: 0.85 } } as Answers;
+  const judgment = { ...answers(0.35, "candidate_0", 0.8, undefined, context), branch_intent: { type: "noul", noul: 0.85 } } as Answers;
   assert.equal(composeDecision(context, judgment).candidateId, context.candidates[0].id);
 });
 
 test("an upward request at a matter edge can select a ramp despite existing level support", () => {
   const original = reachContext();
+  const latest=original.observations.at(-1)!;
+  original.observations=[0,.3,.7].map(age=>({...latest,time:latest.time-.7+age,gaze:[0,.3,-.95] as Vec3}));
   const context = decisionSchema.parse({ ...original, semantic: {
     ...original.semantic,
     player_now: { ...original.semantic.player_now, support: "living matter", position_on_support: "at an edge", facing_into: "living matter", view_height: "looking upward" },
     matter_now: { state: "active", player_supported_by_matter: true },
   } });
   assert.equal(buildDecisionRequest(context).questions.height_intent.type, "noul");
-  const judgment = { ...answers(0.3, "candidate_0", 0.8), branch_intent: { type: "noul", noul: 0.2 }, height_intent: { type: "noul", noul: 0.84 } } as Answers;
+  const judgment = { ...answers(0.3, "candidate_0", 0.8, undefined, context), branch_intent: { type: "noul", noul: 0.2 }, height_intent: { type: "noul", noul: 0.84 } } as Answers;
   assert.equal(composeDecision(context, judgment).candidateId, context.candidates[0].id);
 });
 
@@ -163,19 +173,22 @@ test("no-match holds when the offered continuation is in the wrong direction", (
   assert.equal(composeDecision(context, answers(0.9, "none", 0.9)).hold, true);
 });
 
-test("identical descriptions do not split Choice probability and retained indices map exactly", () => {
+test("identical descriptions share a digit-free option while retaining physical coverage", () => {
   const original = reachContext();
   const candidates = [...original.candidates];
   candidates.splice(2, 0, { ...candidates[1], id: "alias:identical" });
   const context = decisionSchema.parse({ ...original, candidates });
   const criteria = buildDecisionRequest(context).questions.best_candidate.criteria as Record<string, unknown>;
-  assert.equal("candidate_2" in criteria, false);
-  assert.equal(composeDecision(context, answers(0.9, "candidate_2")).hold, true);
-  assert.equal(composeDecision(context, answers(0.9, "candidate_3")).candidateId, candidates[3].id);
+  const group = decisionOptions(context).find(option => option.candidates.some(candidate => candidate.id === "alias:identical"))!;
+  assert.equal(group.candidates.length, 2);
+  assert.equal(Object.keys(criteria).length, Object.keys(buildDecisionRequest(original).questions.best_candidate.criteria!).length);
+  assert.equal(composeDecision(context, answers(0.9, "candidate_2", 0.8, undefined, context)).candidateId, candidates[1].id);
+  assert.equal(composeDecision(context, answers(0.9, "candidate_3", 0.8, undefined, context)).candidateId, candidates[3].id);
+  assert.doesNotThrow(() => assertSemanticPrompt(buildDecisionRequest(context)));
   assert.equal(new Set(Object.values(criteria).map(v => JSON.stringify(v))).size, Object.keys(criteria).length);
 });
 
-test("shared Choice facts are sent once implicitly while distinguishing geometry remains", () => {
+test("shared Choice facts are preserved once while distinct routes remain available", () => {
   const original = reachContext();
   const candidates = original.candidates.filter(candidate => candidate.kind !== "platform");
   const context = decisionSchema.parse({ ...original, candidates });
@@ -183,11 +196,13 @@ test("shared Choice facts are sent once implicitly while distinguishing geometry
   const options = Object.entries(criteria).filter(([key]) => key !== "none");
   assert.ok(options.length > 1);
   assert.ok(options.every(([, option]) => !("player_use" in option)));
-  assert.ok(options.some(([, option]) => "view_offset_degrees" in option));
+  const instruction = buildDecisionRequest(context).questions.best_candidate.instructions as { shared_option_facts: Record<string, string> };
+  assert.equal(instruction.shared_option_facts.formation, "walking path");
+  assert.ok(options.some(([, option]) => "heading" in option));
   assert.equal(new Set(options.map(([, option]) => JSON.stringify(option))).size, options.length);
   const selected = options.at(-1)![0];
-  assert.equal(composeDecision(context, answers(0.9, selected)).candidateId,
-    candidates[Number(selected.slice("candidate_".length))].id);
+  assert.equal(composeDecision(context, answers(0.9, selected, 0.8, undefined, context)).candidateId,
+    decisionOptions(context).find(option => option.label === selected)!.candidates[0].id);
 });
 
 test("SDK batches the exact state and questions in one mocked request", async () => {
@@ -365,7 +380,7 @@ test("occupied weave remains protected while the free section can rebuild behind
   const state = describeMatter(observation(p, [0, 0, 0], facing, 7), { time: 7, activeSite: 0, phase: "active", kind: "weave", weave });
   assert.equal(state.player_supported_by_matter, true);
   assert.equal(state.reusable_section_relative_to_player, "behind");
-  assert.equal(describeCandidate(back.candidates[0], observation(p, [0, 0, 0], facing, 7), true).extends, "ahead");
+  assert.equal(describeCandidate(back.candidates[0], observation(p, [0, 0, 0], facing, 7), true).heading, "ahead");
 });
 
 test("sideways choices in either direction preserve the occupied bank and do not change height", () => {

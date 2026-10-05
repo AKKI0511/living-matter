@@ -26,8 +26,9 @@ export async function replaySession(directory: string) {
     if (context && request && response?.answers) {
       try {
         const parsed = decisionSchema.parse(context);
-        decision = composeDecision(parsed, response.answers);
         requestChanged = !isDeepStrictEqual(buildDecisionRequest(parsed), { state: request.state, questions: request.questions });
+        if (requestChanged) replayError = "Recorded prompt differs from current prompt; its answers cannot be recomposed as current judgments.";
+        else decision = composeDecision(parsed, response.answers);
       } catch (failure) { replayError = failure instanceof Error ? failure.message : "Invalid recording"; }
     }
     return {
@@ -38,7 +39,7 @@ export async function replaySession(directory: string) {
       replayed_decision: decision,
       decision_changed: decision && audit?.decision ? !isDeepStrictEqual(decision, audit.decision) : null,
       request_changed: requestChanged, replay_error: replayError,
-      status: replayError ? "invalid" : !audit ? "pending" : audit.status,
+      status: requestChanged ? "prompt_changed" : replayError ? "invalid" : !audit ? "pending" : audit.status,
     };
   }));
   calls.sort((a, b) => a.sequence !== null && b.sequence !== null ? a.sequence - b.sequence : String(a.started_at).localeCompare(String(b.started_at)) || a.call_id.localeCompare(b.call_id));

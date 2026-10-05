@@ -1,4 +1,5 @@
 import { decisionAuditEnabled } from "./decision-audit-mode";
+import type { DecisionMotionEvidence } from "./decision-freshness";
 
 export function reportDecisionOutcome(
   sessionId: string,
@@ -6,12 +7,13 @@ export function reportDecisionOutcome(
   browserRoundTripMs: number | undefined,
   status: "applied" | "retracted" | "held" | "discarded",
   reason: string,
+  freshness?: DecisionMotionEvidence,
 ) {
   if (!decisionAuditEnabled() || !auditId) return;
   void fetch("/api/decision/outcome", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ sessionId, auditId, browserRoundTripMs, status, reason }),
+    body: JSON.stringify({ sessionId, auditId, browserRoundTripMs, status, reason, freshness }),
     keepalive: true,
   }).then((response) => {
     if (!response.ok) console.warn("Live decision outcome could not be audited.");

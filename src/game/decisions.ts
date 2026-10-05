@@ -53,18 +53,20 @@ export type Intervention = {
 export interface DecisionSource {
   select(context: DecisionContext, signal: AbortSignal): Promise<Intervention>;
   reset?(): void;
+  commit?(candidateId: string, observation: Observation): void;
 }
 
 /** Disposable behavior policy. No stage names, ordering, progression or geometry construction. */
 export class ScenarioDecisions implements DecisionSource {
   async select(
-    { candidates, observations, semantic }: DecisionContext,
+    { candidates, observations, semantic, current }: DecisionContext,
     signal: AbortSignal,
   ): Promise<Intervention> {
     if (signal.aborted) return { candidateId: null };
+    if (current?.phase === "forming") return { candidateId: null, hold: true };
     const latest = observations.at(-1);
-      if (semantic?.player_now.support === "permanent ground" &&
-        ["walkable ground", "living matter"].includes(semantic.player_now.facing_into ?? "") &&
+    if (semantic?.player_now.support === "permanent ground" &&
+      ["walkable ground", "living matter"].includes(semantic.player_now.facing_into ?? "") &&
       !semantic.player_now.motion.includes("behind"))
       return { candidateId: null, hold: true };
     if (semantic?.matter_now.player_supported_by_matter) {
@@ -82,6 +84,14 @@ export class ScenarioDecisions implements DecisionSource {
       return { candidateId: candidates[0]?.id ?? null };
     let best: Candidate | null = null,
       score = -Infinity;
+    const recent = observations.filter(o => latest.time - o.time >= 0 && latest.time - o.time <= 0.6);
+    const jumping = recent.some(o => o.velocity[1] > 2);
+    const gazeLength = Math.hypot(latest.gaze[0], latest.gaze[2]) || 1;
+    const speed = Math.hypot(latest.velocity[0], latest.velocity[2]);
+    const moving = speed > 0.6;
+    const surface = semantic?.player_now.surface_beyond_facing ?? "";
+    const desiredRise = surface.endsWith("higher") || latest.gaze[1] > 0.15 ? 1.5 :
+      surface.endsWith("lower") || latest.gaze[1] < -0.15 ? -1.5 : 0;
     for (const candidate of candidates) {
       const p = candidate.physical;
       if (!p) continue;
@@ -89,23 +99,23 @@ export class ScenarioDecisions implements DecisionSource {
       const dx = aim[0] - latest.position[0],
         dz = aim[2] - latest.position[2],
         length = Math.hypot(dx, dz) || 1;
-      const gaze = (latest.gaze[0] * dx + latest.gaze[2] * dz) / length;
+      const gaze = (latest.gaze[0] * dx + latest.gaze[2] * dz) / (length * gazeLength);
       const travel =
-        (latest.velocity[0] * dx + latest.velocity[2] * dz) / length;
+        (latest.velocity[0] * dx + latest.velocity[2] * dz) / (length * Math.max(speed, 0.6));
       // Looking away and retreating can mean no help. Waiting and looking across can mean help.
-      if (gaze < 0.4 && travel < 0.3) continue;
-      const jumping = observations.slice(-10).some((o) => o.velocity[1] > 2);
-        const preferred = jumping && Math.abs(p.rise) > 1 ? "platform" : "weave";
-        const surface = semantic?.player_now.surface_beyond_facing ?? "";
-        const desiredRise = surface.endsWith("higher") || latest.gaze[1] > 0.15 ? 1.5 :
-          surface.endsWith("lower") || latest.gaze[1] < -0.15 ? -1.5 : 0;
-        const rank =
-        gaze * 4 +
-        Math.max(-2, travel) -
+      if (moving ? travel < 0.25 : gaze < 0.4) continue;
+      // Walking follows travel, waiting follows gaze, and a recent jump can ask
+      // for a ride across a rise. Physical slope/bank/attachment options supply
+      // variety without a random reroll or knowledge of authored stage order.
+      const preferred = jumping && Math.abs(p.rise) > 1 ? "platform" : "weave";
+      const rank =
+        gaze * (moving ? 1.5 : 4) +
+        travel * (moving ? 4 : 0.5) -
         p.distance * 0.12 +
-          (candidate.kind === preferred ? 3 : 0) -
-          (candidate.weaveSegment !== undefined ? Math.abs(p.rise - desiredRise) * 0.4 : 0) +
-          (p.landing ? 1.2 : 0);
+        (candidate.kind === preferred ? 3 : 0) -
+        (candidate.weaveSegment !== undefined ? Math.abs(p.rise - desiredRise) * 0.4 : 0) +
+        (p.landing ? 1.2 : 0) +
+        (candidate.id === current?.candidateId ? 0.45 : 0);
       if (rank > score || (rank === score && candidate.id < (best?.id ?? ""))) {
         best = candidate;
         score = rank;
@@ -128,6 +138,9 @@ export class DecisionGate {
     this.pending?.abort();
     this.pending = null;
     this.source.reset?.();
+  }
+  commit(candidateId: string, observation: Observation | undefined) {
+    if (observation) this.source.commit?.(candidateId, observation);
   }
   async request(
     context: Omit<DecisionContext, "generation">,

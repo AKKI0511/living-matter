@@ -9,6 +9,7 @@ type GameState = {
   muted: boolean;
   quality: Quality;
   renderQuality: RenderQuality;
+  graphicsReady: boolean;
   slow: boolean;
   providerUnavailable: boolean;
   reducedMotion: boolean;
@@ -25,6 +26,7 @@ export const useGame = create<GameState>((set) => ({
   muted: false,
   quality: process.env.NEXT_PUBLIC_RENDER_QUALITY === "low" ? "low" : "auto",
   renderQuality: "low",
+  graphicsReady: false,
   slow: false,
   providerUnavailable: false,
   reducedMotion: false,
@@ -33,7 +35,10 @@ export const useGame = create<GameState>((set) => ({
   setPhase: (phase) => set({ phase }),
   restart: () => set((s) => ({ run: s.run + 1, phase: "playing" })),
   toggleMute: () => set((s) => { save("muted", !s.muted); return { muted: !s.muted }; }),
-  setQuality: (quality) => { save("quality", quality); set({ quality, renderQuality: quality === "auto" ? "low" : quality, slow: false }); },
+  setQuality: (quality) => {
+    save("quality", quality);
+    set(s => s.quality === quality ? {} : { quality, renderQuality: quality === "auto" ? "low" : quality, graphicsReady: false, slow: false });
+  },
 }));
 
 function save(key: string, value: unknown) {

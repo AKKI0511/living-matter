@@ -4,18 +4,24 @@ import { decisionAuditEnabled } from "@/game/decision-audit-mode";
 import { decisionOriginAllowed } from "@/server/decision-origin";
 
 export const runtime = "nodejs";
+const vector = z.tuple([z.number().finite(), z.number().finite(), z.number().finite()]);
+const observation = z.object({
+  time: z.number().nonnegative().finite(), position: vector, velocity: vector, gaze: vector,
+  grounded: z.boolean(), activeStructure: z.string().max(140).nullable(),
+});
 const schema = z.object({
   sessionId: z.uuid(),
   auditId: z.uuid(),
   status: z.enum(["applied", "retracted", "held", "discarded"]),
   reason: z.string().min(1).max(80),
   browserRoundTripMs: z.number().nonnegative().finite().optional(),
+  freshness: z.object({ before: observation.optional(), after: observation.optional() }).optional(),
 });
 export async function POST(request: Request) {
   if (!decisionAuditEnabled()) return Response.json({ error: "Session audit disabled" }, { status: 409 });
   if (!decisionOriginAllowed(request)) return Response.json({ error: "Origin rejected" }, { status: 403 });
   const body = await request.text();
-  if (body.length > 1000) return Response.json({ error: "Invalid outcome" }, { status: 400 });
+  if (body.length > 4096) return Response.json({ error: "Invalid outcome" }, { status: 400 });
   let parsed;
   try { parsed = schema.safeParse(JSON.parse(body)); } catch { return Response.json({ error: "Invalid JSON" }, { status: 400 }); }
   if (!parsed.success) return Response.json({ error: "Invalid outcome" }, { status: 400 });

@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   DecisionGate,
   ScenarioDecisions,
+  type Candidate,
   type Intervention,
 } from "../src/game/decisions";
 import { createWeave, weaveRoute, weaveCandidates } from "../src/game/weave";
@@ -18,6 +19,31 @@ test("scenario source selects a validated candidate; empty contexts permit no in
   const gate = new DecisionGate(new ScenarioDecisions());
   assert.deepEqual(await gate.request(context), candidate);
   assert.equal(await gate.request({ observations: [], candidates: [] }), null);
+});
+
+test("preview follows sideways/backward travel while gaze alone can choose a different route", async () => {
+  const options: Candidate[] = [["ahead", 0, -6], ["right", 6, 0], ["behind", 0, 6]].map(([id, x, z]) => ({
+    ...candidate, id: String(id), kind: "weave", physical: { from: [0, 0, 0], to: [Number(x), 0, Number(z)], distance: 1, span: 6, rise: 0, medium: "air" },
+  }));
+  const o = { time: 5, position: [0, .825, 0] as Vec3, velocity: [4, 0, 0] as Vec3, gaze: [0, 0, -1] as Vec3, grounded: true, activeStructure: null };
+  const source = new ScenarioDecisions(), signal = new AbortController().signal;
+  const select = (velocity: Vec3, gaze = o.gaze) => source.select({ generation: 0, candidates: options, observations: [{ ...o, velocity, gaze }] }, signal);
+  assert.equal((await select([4, 0, 0])).candidateId, "right");
+  assert.equal((await select([0, 0, 4])).candidateId, "behind");
+  assert.equal((await select([0, 0, 0])).candidateId, "ahead");
+  assert.equal((await select([0, 0, 0], [0, -.95, -.31])).candidateId, "ahead");
+  assert.equal((await source.select({ generation: 0, candidates: options, observations: [o], current: { candidateId: "ahead", phase: "forming" } }, signal)).hold, true);
+});
+
+test("preview uses recent jumps for rides and forgets old jump intent", async () => {
+  const physical = { from: [0, 0, 0] as Vec3, to: [0, 3, -6] as Vec3, distance: 1, span: 6, rise: 3, medium: "air" as const };
+  const candidates = [{ ...candidate, id: "walk", kind: "weave" as const, physical }, { ...candidate, id: "ride", kind: "platform" as const, physical }];
+  const o = { time: 5, position: [0, .825, 0] as Vec3, velocity: [0, 0, 0] as Vec3, gaze: [0, 0, -1] as Vec3, grounded: true, activeStructure: null };
+  const source = new ScenarioDecisions(), signal = new AbortController().signal;
+  for (const [time, expected] of [[4.7, "ride"], [3, "walk"]] as const) {
+    const result = await source.select({ generation: 0, candidates, observations: [{ ...o, time, velocity: [0, 3, 0] }, o] }, signal);
+    assert.equal(result.candidateId, expected);
+  }
 });
 
 test("preview keeps an approaching half at a rim and still permits a deliberate side departure", async () => {

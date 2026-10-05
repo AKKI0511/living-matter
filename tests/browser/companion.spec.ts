@@ -1,6 +1,6 @@
 import { expect, observeJump, test, type Page } from "./fixtures";
-import { sites, structureBoxes } from "../../src/game/world";
-import { go } from "./steering-helpers";
+import { sites } from "../../src/game/world";
+import { go, boardPlatform } from "./steering-helpers";
 
 const snap = (page: Page) => page.evaluate(() => window.__livingMatter!.snapshot() as {
   time: number; player: number[]; grounded: boolean; recoveries: number;
@@ -27,7 +27,7 @@ test("free movement relative to a travelling platform, including reversing and j
     window.__livingMatter!.formation(2, "platform");
   }, { start: site.start });
   await expect.poll(async () => (await snap(page)).states[2].phase).toBe("active");
-  await go(page, structureBoxes(site, "platform")[0].position);
+  await boardPlatform(page, 2);
   await expect.poll(async () => (await snap(page)).states[2].offset[2]).toBeLessThan(-4);
   await page.evaluate(() => window.__livingMatter!.look(0, 0));
   const relative = async () => {

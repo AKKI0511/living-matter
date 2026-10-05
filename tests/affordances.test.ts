@@ -152,3 +152,11 @@ test("a stalled future provider times out and can be queried again", async () =>
   assert.equal(await gate.request({ observations: [], candidates: [] }), null);
   assert.equal(calls, 2);
 });
+
+test("a side-shore departure offers descending and rising paths instead of only level paths",()=>{
+  const candidates=availableCandidates([3.903,6.832,-101.365]);
+  assert.ok(candidates.some(c=>c.physical!.rise<0));
+  assert.ok(candidates.some(c=>c.physical!.rise>0));
+  assert.ok(candidates.some(c=>c.physical!.rise===0));
+  assert.ok(candidates.length<=16);
+});

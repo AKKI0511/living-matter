@@ -130,6 +130,7 @@ export function formMatter(
   runtime.manualFormation = false;
   runtime.activeSite = index;
   runtime.activeCandidateId = candidateId ?? `${sites[index].id}:${kind}`;
+  runtime.gate.commit(runtime.activeCandidateId, currentObservation(runtime));
   runtime.weave =
     kind === "weave"
       ? createWeave(route ?? weaveRoute(sites[index], 0, reverse), runtime.time)

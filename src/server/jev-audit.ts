@@ -3,6 +3,7 @@ import { execFileSync } from "node:child_process";
 import { mkdir, readdir, readFile, rename, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { decisionPolicy } from "./decision-request";
+import type { DecisionMotionEvidence } from "../game/decision-freshness";
 
 const PRICE_SOURCE = "https://docs.typesafe.ai/models";
 const PRICE_CHECKED_AT = "2026-09-27";
@@ -292,6 +293,7 @@ export async function recordJevGameOutcome(sessionId: string, callId: string, ou
   status: "applied" | "retracted" | "held" | "discarded";
   reason: string;
   browserRoundTripMs?: number;
+  freshness?: DecisionMotionEvidence;
 }) {
   return withSessionLock(sessionId, async () => {
     const directory = callDirectory(sessionId, callId);
@@ -305,6 +307,7 @@ export async function recordJevGameOutcome(sessionId: string, callId: string, ou
       status: outcome.status,
       reason: outcome.reason,
       browser_round_trip_ms: numberOrNull(outcome.browserRoundTripMs),
+      ...(outcome.freshness ? { freshness: outcome.freshness } : {}),
     });
     await refreshSummary(sessionId);
   });

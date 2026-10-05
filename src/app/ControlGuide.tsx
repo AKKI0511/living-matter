@@ -9,6 +9,7 @@ export default function ControlGuide({ compact = false }: { compact?: boolean })
     <dl className="finger-guide">
       <div><dt>Move</dt><dd>Left stick</dd></div>
       <div><dt>Jump</dt><dd>↑ button</dd></div>
+      <div><dt>Sprint</dt><dd>Push stick further</dd></div>
     </dl>
   </section>;
 }
