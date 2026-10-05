@@ -18,6 +18,7 @@ test(`a jump onto forming ${example.kind} lands while its pieces are still assem
   await page.keyboard.up("w");
   const state=await snapshot(page);
   expect(state.states[example.index].phase).toBe("forming");
+  expect(state.solidMatterColliders).toBeGreaterThan(0);
   expect(state.player[2]).toBeLessThan(example.edge);
   expect(state.recoveries).toBe(0);
   await expect.poll(async()=>(await snapshot(page)).states[example.index].phase).toBe("active");
@@ -28,6 +29,8 @@ test("forming matter passes a standing player without moving or trapping the cap
   await page.goto("/play");
   await page.getByRole("button",{name:"Play",exact:true}).click();
   await page.evaluate(()=>{window.__livingMatter!.teleport([0,.825,-23]);window.__livingMatter!.look(0,0);window.__livingMatter!.formation(0,"bridge");});
+  await page.waitForFunction(() => (window.__livingMatter!.snapshot() as { time: number }).time > .2);
+  expect((await snapshot(page)).solidMatterColliders).toBe(0);
   await expect.poll(async()=>(await snapshot(page)).states[0].phase).toBe("active");
   const before=await snapshot(page);
   expect(before.recoveries).toBe(0);

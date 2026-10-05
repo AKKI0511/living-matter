@@ -8,6 +8,11 @@ export default function TouchControls() {
   const move = useRef<{ id: number; x: number; y: number } | null>(null);
   const look = useRef<{ id: number; x: number; y: number } | null>(null);
   const jump = useRef<number | null>(null);
+  const cancelJump = (e: PointerEvent<HTMLButtonElement>) => {
+    if (jump.current !== e.pointerId) return;
+    jump.current = null;
+    input.jump = input.jumpQueued = false;
+  };
   const clearMove = () => {
     move.current = null;
     input.forward = input.right = 0; input.sprint = false;
@@ -47,6 +52,6 @@ export default function TouchControls() {
     <button className="touch-jump" aria-label="Jump" onPointerDown={e => {
       if (jump.current !== null) return;
       e.currentTarget.setPointerCapture(e.pointerId); jump.current = e.pointerId; input.jump = input.jumpQueued = true;
-    }} onPointerUp={e => { if (jump.current === e.pointerId) { jump.current = null; input.jump = false; } }} onPointerCancel={e => { if (jump.current === e.pointerId) { jump.current = null; input.jump = false; } }} onLostPointerCapture={e => { if (jump.current === e.pointerId) { jump.current = null; input.jump = false; } }}>↑</button>
+    }} onPointerUp={e => { if (jump.current === e.pointerId) { jump.current = null; input.jump = false; } }} onPointerCancel={cancelJump} onLostPointerCapture={cancelJump}>↑</button>
   </div>;
 }

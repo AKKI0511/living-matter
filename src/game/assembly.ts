@@ -11,9 +11,18 @@ export function angleBlend(from: number, to: number, progress: number) {
   return from + Math.atan2(Math.sin(to - from), Math.cos(to - from)) * progress;
 }
 
-/** The selected surface catches a landing; assembly cannot lift a player from below. */
-export function assemblySupportsPlayer(top: number, playerY: number, forming: boolean) {
-  return !forming || playerY - 0.825 >= top - 0.1;
+export type AssemblyContact = { above: boolean; landed: boolean };
+
+/** Admit forming support after an airborne approach and actual downward contact. */
+export function assemblySupportsPlayer(top: number, motion: {
+  player: readonly number[]; velocity: readonly number[]; grounded: boolean;
+}, contact?: AssemblyContact) {
+  if (!contact) return true;
+  const feet = motion.player[1] - 0.825, velocityY = motion.velocity[1];
+  if (!motion.grounded && feet > top + 0.2) contact.above = true;
+  if (contact.above && !motion.grounded && velocityY < 0 &&
+    feet >= top - 0.1 && feet <= top + 0.12 - velocityY / 60) contact.landed = true;
+  return contact.landed && feet >= top - 0.1;
 }
 
 /** Visual pieces pass around the capsule; physics belongs to the destination surface. */

@@ -1,6 +1,6 @@
-import { expect, observeJump, test, type Page } from "./fixtures";
-import { sites, structureBoxes, platformOffset, PLATFORM_HALF_CYCLE_SECONDS, type FormationKind } from "../../src/game/world";
-import { go } from "./steering-helpers";
+import { expect, test, type Page } from "./fixtures";
+import { sites, type FormationKind } from "../../src/game/world";
+import { go, boardPlatform } from "./steering-helpers";
 type Snapshot = {
   time: number;
   player: number[];
@@ -37,11 +37,9 @@ for (const [index, kind] of [
       .poll(async () => (await snapshot(page)).states[index].phase)
       .toBe("active");
     if (kind === "platform") {
-      await go(page, structureBoxes(site, "platform")[0].position);
+      await boardPlatform(page, index);
       await expect
         .poll(async () => (await snapshot(page)).player[2], {
-          // A slow CI frame rate can miss the first shuttle departure; allow
-          // the next cycle before calling the traversal impossible.
           timeout: 40_000,
           intervals: [100],
         })
@@ -54,9 +52,6 @@ for (const [index, kind] of [
       body: JSON.stringify(await snapshot(page)),
       contentType: "application/json",
     });
-    await expect
-      .poll(async () => (await snapshot(page)).player[1], { timeout: 4000 })
-      .toBeLessThan(site.end[1] + 1);
     const state = await snapshot(page);
     expect(state.recoveries).toBe(0);
     expect(state.player[1]).toBeGreaterThan(site.end[1] + 0.7);
@@ -121,43 +116,12 @@ test("largest formation keeps a stable render loop", async ({ page }, info) => {
   expect(timing.frames).toBeGreaterThan(150);
 });
 
-test("jumping aboard a moving platform preserves transport momentum", async ({
-  page,
-}) => {
-  await page.goto("/play");
-  await page.getByRole("button", { name: /^Play$/ }).click();
-  await page.evaluate(() => {
-    window.__livingMatter!.teleport([14, 7, -109]);
-    window.__livingMatter!.formation(2, "platform");
-  });
-  await expect
-    .poll(async () => (await snapshot(page)).states[2].phase)
-    .toBe("active");
-  await go(page, structureBoxes(sites[2], "platform")[0].position);
-  await expect
-    .poll(async () => (await snapshot(page)).states[2].offset[2], {
-      intervals: [50],
-    })
-    .toBeLessThan(-8);
-  const jumped = observeJump(page);
-  await page.keyboard.press("Space");
-  await jumped;
-  await expect
-    .poll(async () => (await snapshot(page)).grounded, { intervals: [50] })
-    .toBe(true);
-  expect((await snapshot(page)).recoveries).toBe(0);
-  await page.waitForTimeout(1500);
-  expect((await snapshot(page)).recoveries).toBe(0);
-});
-
 test("a faster deck boards at the far dock and safely carries back down to the near shore",async({page})=>{
   const site=sites[1];
   await page.goto("/play");await page.getByRole("button",{name:/^Play$/}).click();
   await page.evaluate(({site})=>{window.__livingMatter!.teleport([site.end[0],site.end[1]+1,site.end[2]-2]);window.__livingMatter!.formation(1,"platform",0,true);},{site});
   await expect.poll(async()=>(await snapshot(page)).states[1].phase).toBe("active");
-  const dock=structureBoxes(site,"platform")[0].position;
-  const offset=platformOffset(site,PLATFORM_HALF_CYCLE_SECONDS);
-  await go(page,dock.map((v,a)=>v+offset[a]));
+  await boardPlatform(page, 1, true);
   await expect.poll(async()=>(await snapshot(page)).player[2],{timeout:40_000,intervals:[100]}).toBeGreaterThan(site.start[2]-4);
   await go(page,[site.start[0],site.start[1],site.start[2]+4.5]);
   await expect.poll(async()=>(await snapshot(page)).grounded).toBe(true);

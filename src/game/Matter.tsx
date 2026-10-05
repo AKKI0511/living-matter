@@ -28,8 +28,10 @@ import {
   PLATFORM_HALF_CYCLE_SECONDS,
   sites,
   supportHeight,
+  boxCoordinates,
+  PLAYER_RADIUS,
 } from "./world";
-import { assemblyProgress, angleBlend, assemblySupportsPlayer, assemblyDetour } from "./assembly";
+import { assemblyProgress, angleBlend, assemblySupportsPlayer, assemblyDetour, type AssemblyContact } from "./assembly";
 import { formMatter, semanticSnapshot, currentObservation, decisionObservations, type Runtime } from "./runtime";
 import { availableCandidates, onPermanentGround } from "./affordances";
 import { sound } from "./audio";
@@ -56,6 +58,7 @@ export function Matter({ runtime }: { runtime: Runtime }) {
   const weaveColliders = useRef<(RapierCollider | null)[]>([]);
   const colliderBanks = useRef<(WeaveBank | null)[]>([null, null]);
   const bankVersions = useRef([-1, -1]);
+  const landingContacts = useRef(new Map<number, AssemblyContact & { since: number }>());
   const bankPoses = useRef<
     ({
       source: WeaveBank;
@@ -155,15 +158,29 @@ export function Matter({ runtime }: { runtime: Runtime }) {
       if (state.phase === "forming") state.previousOffset = [...state.offset];
     }
     runtime.solidColliderHandles.clear();
+    const admit = (c: RapierCollider, top: number, forming: boolean, since: number, within: boolean) => {
+      if (!forming) { landingContacts.current.delete(c.handle); return true; }
+      if (!within) return false;
+      let contact = landingContacts.current.get(c.handle);
+      if (!contact || contact.since !== since) {
+        contact = { since, above: false, landed: false };
+        landingContacts.current.set(c.handle, contact);
+      }
+      return assemblySupportsPlayer(top, runtime, contact);
+    };
     colliders.current.forEach((c, i) => {
       if (!c) return;
       runtime.matterColliderHandles.add(c.handle);
+      const point = state ? [runtime.player[0] - state.offset[0], runtime.player[1], runtime.player[2] - state.offset[2]] as const : runtime.player;
+      const top = supportHeight(boxes[i], [...point]);
+      const local = boxCoordinates([point[0], top, point[2]], boxes[i]);
       const enabled =
         (state?.phase === "active" || state?.phase === "forming") &&
         state.kind !== "weave" &&
         boxes[i].index === index &&
         boxes[i].kind === state.kind &&
-        assemblySupportsPlayer(supportHeight(boxes[i], [runtime.player[0] - state.offset[0], runtime.player[1], runtime.player[2] - state.offset[2]]) + state.offset[1], runtime.player[1], state.phase === "forming");
+        admit(c, top + state.offset[1], state.phase === "forming", state.since,
+          Math.abs(local[0]) <= boxes[i].size[0] / 2 + PLAYER_RADIUS && Math.abs(local[2]) <= boxes[i].size[2] / 2 + PLAYER_RADIUS);
       c.setEnabled(enabled);
       if (enabled) runtime.solidColliderHandles.add(c.handle);
     });
@@ -171,10 +188,12 @@ export function Matter({ runtime }: { runtime: Runtime }) {
       if (!c) return;
       runtime.matterColliderHandles.add(c.handle);
       const bank = state?.kind === "weave" ? runtime.weave?.banks[i] : null;
+      const progress = bank ? bankProgress(bank, runtime.player) : null;
       const enabled =
         !!bank &&
         (state?.phase === "active" || state?.phase === "forming") &&
-        assemblySupportsPlayer(bankProgress(bank, runtime.player).top, runtime.player[1], state.phase === "forming" || runtime.time - bank.since < WEAVE_SECONDS);
+        admit(c, progress!.top, state.phase === "forming" || runtime.time - bank.since < WEAVE_SECONDS, bank.since,
+          progress!.across <= 2.4 + PLAYER_RADIUS && progress!.t >= -0.05 && progress!.t <= 1.05);
       c.setEnabled(enabled);
       if (bank && colliderBanks.current[i] !== bank) {
         const g = bankGeometry(bank);

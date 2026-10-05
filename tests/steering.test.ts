@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { createWeave, weaveRoute, weaveCandidates, applySteeringCandidate, bankProgress, guardWeaveEdge, weavePose } from "../src/game/weave";
+import { createWeave, weaveRoute, weaveCandidates, applySteeringCandidate, bankProgress, guardWeaveEdge, weavePose, weaveServesRoute } from "../src/game/weave";
 import { sites, withinMatterBounds, type Vec3 } from "../src/game/world";
 import { PhysicalHistory, describeCandidate } from "../src/game/semantic";
 import type { Observation } from "../src/game/decisions";
@@ -104,4 +104,24 @@ test("the player can step across a shore seam smaller than their capsule radius"
     if (gap < 0.47) assert.deepEqual(guarded, movement);
     else assert.notDeepEqual(guarded, movement);
   }
+});
+
+test("an existing level route serves the same route but cannot veto a climb, descent or turn",()=>{
+  const route: [number,number,number][]=[[0,0,-25],[0,0,-31],[0,0,-37]],weave=createWeave(route,0);
+  const candidate={id:"route",siteId:"reach",kind:"weave" as const,route,
+    physical:{from:route[0],to:route[2],distance:1,span:12,rise:0,medium:"air" as const}};
+  assert.equal(weaveServesRoute(weave,candidate),true);
+  assert.equal(weaveServesRoute(weave,{...candidate,route:[route[2],route[1],route[0]]}),true);
+  for(const rise of [-1.5,1.5])
+    assert.equal(weaveServesRoute(weave,{...candidate,route:[route[0],[0,rise,-31],[0,rise*2,-37]]}),false);
+  assert.equal(weaveServesRoute(weave,{...candidate,route:[route[0],route[1],[4,0,-36]]}),false);
+  assert.equal(weaveServesRoute(weave,{...candidate,route:[route[0],route[1],[0,0,-40]]}),false);
+  assert.equal(weaveServesRoute(weave,{...candidate,crossSlope:.1}),false);
+});
+
+test("a route at landing height cannot descend below the nearby landing cliff",()=>{
+  const weave=createWeave([[3,6,-170],[3,6,-176],[3,6,-182]],0);
+  const options=weaveCandidates(weave,sites[3],[3,6.885,-174],5)!;
+  assert.ok(options.candidates.some(c=>c.attachment==="far end"&&c.physical!.rise>=0));
+  assert.ok(!options.candidates.some(c=>c.attachment==="far end"&&c.physical!.to[2]<-180&&c.physical!.rise<0));
 });

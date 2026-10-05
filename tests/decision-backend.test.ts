@@ -1,3 +1,4 @@
+import { shoreContext } from "./helpers/jev-context";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { JevDecisions } from "../src/game/decision-backend";
@@ -12,20 +13,25 @@ test("unchanged holds are cached and a changed candidate meaning triggers a new 
     calls++;
     return Response.json({ candidateId: null, hold: true, recheckAfterMs: 1800, auditId: "first-call" });
   });
-  const latest: Observation = { time: 1, position: [0, 0.825, -23], velocity: [0, 0, 0], gaze: [0, 0, -1], grounded: true, activeStructure: null };
-  const context: DecisionContext = { generation: 0, observations: [latest], candidates: availableCandidates(latest.position) };
+  const context = shoreContext(), latest = context.observations.at(-1)!;
   const source = new JevDecisions(), signal = new AbortController().signal;
   await source.select(context, signal);
   now = 2000;
   assert.equal((await source.select(context, signal)).auditId, undefined);
-  now = 7900;
+  now = 30_000;
+  context.candidates.reverse();
+  context.semantic.recent_behavior_oldest_to_newest = [context.semantic.player_now];
   await source.select(context, signal);
   assert.equal(calls, 1);
   await source.select({ ...context, observations: [{ ...latest, gaze: [1, 0, 0] }] }, signal);
   assert.equal(calls, 2);
-  now = 16000;
+  now = 40_000;
   await source.select(context, signal);
   assert.equal(calls, 3);
+  context.observations.push({ ...latest, time: 2, grounded: false, velocity: [0, 3, 0] }, { ...latest, time: 2.4 });
+  now = 42_000;
+  await source.select(context, signal);
+  assert.equal(calls, 4);
 });
 
 const latest: Observation = { time: 1, position: [0, 0.825, -23], velocity: [0, 0, -2], gaze: [0, 0, -1], grounded: true, activeStructure: null };
@@ -99,4 +105,32 @@ test("pause and obsolete requests do not switch backend or apply preview", async
   finish(new Response(null, { status: 503 }));
   assert.equal((await pending).valid, false);
   assert.equal(useGame.getState().providerUnavailable, false);
+});
+
+test("an offered idle continuation survives history expiry and menu changes until deliberate new intent",async t=>{
+  let clock=0,calls=0;
+  t.mock.method(performance,"now",()=>clock);
+  const context=shoreContext(),id=context.candidates[0].id;
+  t.mock.method(globalThis,"fetch",async()=>{calls++;return Response.json({candidateId:id});});
+  const source=new JevDecisions(),signal=new AbortController().signal;
+  await source.select(context,signal);
+  context.current={candidateId:id,phase:"active"};
+  context.semantic.recent_behavior_oldest_to_newest=[context.semantic.player_now];
+  context.candidates=context.candidates.slice().reverse();
+  clock=30_000;
+  assert.equal((await source.select(context,signal)).hold,true);
+  assert.equal(calls,1);
+  context.observations=context.observations.map(o=>({...o,gaze:[1,0,0]}));
+  await source.select(context,signal);
+  assert.equal(calls,2);
+});
+
+test("acknowledging an applied formation restores its commitment after the geometry reset",async t=>{
+  let calls=0;
+  const context=shoreContext(),id=context.candidates[0].id;
+  t.mock.method(globalThis,"fetch",async()=>{calls++;return Response.json({candidateId:id});});
+  const source=new JevDecisions(),signal=new AbortController().signal;
+  await source.select(context,signal);source.reset();source.commit(id,context.observations.at(-1)!);
+  context.current={candidateId:id,phase:"active"};
+  assert.equal((await source.select(context,signal)).hold,true);assert.equal(calls,1);
 });

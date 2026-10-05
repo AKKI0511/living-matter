@@ -83,6 +83,7 @@ function Simulation({ runtimeRef }: { runtimeRef: RefObject<Runtime | null> }) {
             player: runtime.player,
             velocity: runtime.velocity,
             grounded: runtime.grounded,
+            solidMatterColliders: runtime.solidColliderHandles.size,
             recoveries: runtime.recoveries,
             states: runtime.states,
             phase: useGame.getState().phase,

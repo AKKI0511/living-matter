@@ -28,9 +28,6 @@ jobs:
       - run: pnpm test
       - run: pnpm build
       - run: pnpm exec playwright install --with-deps chromium
-      - name: Check formation traversal before the full browser suite
-        run: pnpm exec playwright test formations.spec.ts -g 'reach also'
-        timeout-minutes: 4
       - run: pnpm test:e2e
         timeout-minutes: 20
       - name: Check mocked live transport

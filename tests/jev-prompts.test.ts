@@ -1,6 +1,5 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { TypeSafeClient } from "@typesafe-ai/sdk";
 import { assertSemanticPrompt } from "../src/game/decision-state";
 import { buildDecisionRequest, composeDecision, decisionOptions, type DecisionRequestContext } from "../src/server/decision-request";
 import { edgeContext, shoreContext } from "./helpers/jev-context";
@@ -17,22 +16,11 @@ function judgments(context: DecisionRequestContext, selected: string, probabilit
   } as Answers;
 }
 
-test("every prompt branch is text-only, digit-free and independent of engine identifiers", async () => {
+test("every prompt branch is text-only, digit-free and independent of engine identifiers", () => {
   for (const context of [shoreContext(), edgeContext()]) {
     const request = buildDecisionRequest(context);
     assert.doesNotThrow(() => assertSemanticPrompt(request));
     assert.doesNotMatch(JSON.stringify(request), /\d|distance_units|degrees|length_units|rise_units|weave|siteId|sessionId/);
-    let sent = false;
-    const client = new TypeSafeClient({ apiKey: "mock", fetch: async (_url, init) => {
-      const body = JSON.parse(String(init?.body));
-      assert.deepEqual(body.state, request.state);
-      assert.deepEqual(body.questions, request.questions);
-      assertSemanticPrompt({ state: body.state, questions: body.questions });
-      sent = true;
-      return Response.json({ model: "mock", answers: {}, usage: {} });
-    } });
-    await client.systemOne(request);
-    assert.ok(sent);
   }
 });
 
@@ -138,7 +126,8 @@ test("unclear intent, no-match uncertainty, opposing alternatives and malformed 
   const spuriousBranch = { ...clear, branch_intent: { type: "noul" as const, noul: .99 } }; // Not asked at this ground edge.
   assert.equal(composeDecision(context, spuriousBranch).hold, true);
   assert.equal(composeDecision(context, judgments(context, "none")).hold, true);
-  assert.throws(() => composeDecision(context, judgments(context, options[0].label, { none: .01 }, .05)), /probabilities/);
+  for (const confidence of [.05, .9])
+    assert.throws(() => composeDecision(context, judgments(context, options[0].label, { none: .01 }, confidence)), /probabilities/);
   assert.throws(() => composeDecision(context, judgments(context, options[0].label, { ...low, invented: .2 }, .05)), /probabilities/);
   const backwards = structuredClone(context);
   backwards.observations.forEach(observation => { observation.gaze = [0,0,1]; });
@@ -152,34 +141,6 @@ test("a missing view height does not request a speculative height judgment", () 
   delete context.semantic.player_now.view_height;
   assert.ok(buildDecisionRequest(context).questions.branch_intent);
   assert.equal(buildDecisionRequest(context).questions.height_intent, undefined);
-});
-
-test("uncertain alternatives can mix heights instead of enforcing the destination height in code", () => {
-  const context = edgeContext();
-  context.semantic.player_now.view_height = "looking roughly level";
-  context.semantic.player_now.surface_beyond_facing = "separate walkable ground higher";
-  context.observations.forEach(observation => { observation.gaze = [0,0,-1]; });
-  const turning = context.candidates.filter(candidate => candidate.attachment === "far end" && candidate.turnDegrees === 35);
-  context.candidates = [turning.find(candidate => Math.abs(candidate.physical.rise) < .1)!,
-    turning.find(candidate => candidate.physical.rise > 1)!];
-  const options = decisionOptions(context);
-  assert.equal(options.length, 2);
-  const distribution = Object.fromEntries([...options.map(option => [option.label,.49]),["none",.02]]);
-  const rises=new Set<number>();
-  for(let index=0;index<40;index++) {
-    const next={...context,sessionId:`00000000-0000-4000-8000-${index.toString(16).padStart(12,"0")}`};
-    const decision=composeDecision(next,judgments(next,options[0].label,distribution,.05));
-    rises.add(context.candidates.find(candidate=>candidate.id===decision.candidateId)!.physical.rise);
-  }
-  // Both are turns, so a credible Jev-selected turn stays selected even when
-  // the other option has the height code previously insisted upon.
-  assert.ok(rises.has(options[0].candidates[0].physical.rise));
-});
-
-test("a confident Choice with a malformed distribution is rejected as an invalid provider reply", () => {
-  const context = shoreContext();
-  const option = decisionOptions(context)[0];
-  assert.throws(() => composeDecision(context,judgments(context,option.label,{ [option.label]:1 },.9)), /probabilities/);
 });
 
 test("a suitable curve chosen by Jev survives a near-tied straight alternative", () => {
@@ -256,12 +217,12 @@ test("clear waiting intent and a held gap view tolerate slight no-match uncertai
   const context=shoreContext(),menu=decisionOptions(context);
   const forward=menu.find(o=>o.description.view_alignment==="aligned")!;
   const zeros=Object.fromEntries(menu.map(o=>[o.label,0]));
-  const probabilities={...zeros,[forward.label]:.84,none:.16};
+  const probabilities={...zeros,[forward.label]:.69,none:.31};
   assert.equal(buildDecisionRequest(context).state.player_now.view_attention,"view held in the same direction");
   assert.ok(composeDecision(context,judgments(context,forward.label,probabilities,.25)).candidateId);
   const scanning=structuredClone(context);
   scanning.observations[0].gaze=[1,0,0];
-  assert.ok(composeDecision(scanning,judgments(scanning,forward.label,probabilities,.25)).candidateId);
+  assert.equal(composeDecision(scanning,judgments(scanning,forward.label,probabilities,.25)).hold,true);
 });
 
 test("rounded probability totals are accepted at both boundaries while malformed totals are rejected", () => {
@@ -335,4 +296,13 @@ test("candidate prompts keep direction, shape and height without decorative or v
     assert.ok("vertical_change" in option || "shared_option_facts" in (request.questions.best_candidate.instructions as object));
   }
   assertSemanticPrompt(request);
+});
+
+test("a separate height judgment cannot replace a strong Jev choice with a weak different-height option",()=>{
+  const context=edgeContext(),menu=decisionOptions(context);
+  const level=menu.find(o=>o.description.vertical_change==="at similar height")!;
+  const higher=menu.find(o=>o.description.vertical_change==="higher")!;
+  const answers={action_needed:{type:"noul",noul:.9},branch_intent:{type:"noul",noul:.9},height_intent:{type:"noul",noul:.9},best_candidate:{type:"choice",choice:level.label,confidence:.8,
+    probabilities:Object.fromEntries([...menu.map(o=>[o.label,o===level?.83:o===higher?.04:0]),["none",.13]])}} as Parameters<typeof composeDecision>[1];
+  assert.ok(level.candidates.some(c=>c.id===composeDecision(context,answers).candidateId));
 });

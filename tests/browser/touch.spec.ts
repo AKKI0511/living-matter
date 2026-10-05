@@ -1,4 +1,4 @@
-import { expect, test } from "./fixtures";
+import { expect, observeJump, test } from "./fixtures";
 
 test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
 
@@ -29,8 +29,9 @@ test("stick tracks the finger, walks then sprints, and handles simultaneous look
   await expect.poll(async () => (await snapshot()).diagnostics.input.yaw).toBeLessThan(yaw - .05);
   const jump = (await page.getByLabel("Jump", { exact: true }).boundingBox())!;
   const jumping = { id: 3, x: jump.x + jump.width / 2, y: jump.y + jump.height / 2 };
+  const jumped = observeJump(page, (await snapshot()).player[1] + .3);
   await touch("touchStart", [running, { ...looking, x: 320 }, jumping]);
-  await expect.poll(async () => (await snapshot()).velocity[1]).toBeGreaterThan(2);
+  await jumped;
   await touch("touchEnd", []);
   await expect(thumb).toHaveCSS("transform", "matrix(1, 0, 0, 1, 0, 0)");
   await expect.poll(async () => (await snapshot()).diagnostics.input.sprint).toBe(false);
@@ -55,6 +56,29 @@ test("stick tracks the finger, walks then sprints, and handles simultaneous look
   await touch("touchEnd", []);
   await page.getByLabel("Pause", { exact: true }).tap();
   await expect(page.getByRole("button", { name: "Resume", exact: true })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(844);
+});
+
+test("cancelled jump pointers do not jump, while a quick tap still does", async ({ page }) => {
+  await page.goto("/play?diagnostics");
+  await page.getByRole("button", { name: "Play", exact: true }).tap();
+  const state = () => page.evaluate(() => window.__livingMatter!.snapshot() as { time: number; grounded: boolean; player: number[] });
+  await expect.poll(async () => (await state()).grounded).toBe(true);
+  const jump = page.getByLabel("Jump", { exact: true });
+  for (const type of ["pointercancel", "lostpointercapture"]) {
+    await jump.evaluate((button, type) => button.addEventListener("pointerdown", event => {
+      const pointerId = (event as PointerEvent).pointerId;
+      queueMicrotask(() => button.dispatchEvent(new PointerEvent(type, { bubbles: true, pointerId })));
+    }, { once: true }), type);
+    const before = await state();
+    await jump.tap();
+    await page.waitForFunction(time => (window.__livingMatter!.snapshot() as { time: number }).time > time + .3, before.time);
+    expect((await state()).player[1]).toBeCloseTo(before.player[1], 1);
+    expect((await state()).grounded).toBe(true);
+  }
+  const jumped = observeJump(page, (await state()).player[1] + .3);
+  await jump.tap();
+  await jumped;
 });
 
 test("supported phones can leave automatic fullscreen and resume in the browser", async ({ page }) => {
