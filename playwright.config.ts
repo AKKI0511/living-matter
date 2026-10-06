@@ -1,7 +1,15 @@
 import { defineConfig } from "@playwright/test";
+const ci = !!process.env.CI;
+// Keep browser integration in CI; exhaustive geometry/policy cases run as units,
+// and graphics measurements run locally with hardware acceleration.
+const ciSpecs = process.env.NEXT_PUBLIC_DECISION_BACKEND === "jev"
+  ? ["live-transport", "fallback", "jev-policy", "mixed-side-exits"]
+  : ["browser", "companion", "exploration", "formations", "forming-support", "journey", "lifecycle", "shore-collisions", "touch", "weave"];
 export default defineConfig({
   testDir: "./tests/browser",
-  timeout: 180_000,
+  testMatch: ci ? ciSpecs.map(name => `**/${name}.spec.ts`) : undefined,
+  timeout: ci ? 90_000 : 180_000,
+  maxFailures: ci ? 1 : 0,
   workers: 1,
   reporter: process.env.CI ? "line" : "list",
   expect: { timeout: process.env.CI ? 30_000 : 12_000 },

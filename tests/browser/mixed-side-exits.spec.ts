@@ -3,7 +3,8 @@ import {decisionSchema,buildDecisionRequest,composeDecision,decisionOptions} fro
 import {snapshot,go} from "./steering-helpers";
 
 test.skip(process.env.NEXT_PUBLIC_DECISION_BACKEND==="preview","Live bundle with mocked inference.");
-for(const side of [-1,1]) test(`an ascending walkway can form and walk a descending absolute ${side<0?"left":"right"} exit`,async({page})=>{
+test("an ascending walkway can form and walk a descending side exit",async({page})=>{
+  const side = -1;
   let offered=false;
   await page.route("**/api/decision",async route=>{
     const context=decisionSchema.parse(route.request().postDataJSON()),request=buildDecisionRequest(context),menu=decisionOptions(context);

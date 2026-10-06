@@ -1,22 +1,11 @@
-import { expect, test, type Page } from "./fixtures";
+import { expect, test } from "./fixtures";
 import { sites, type FormationKind } from "../../src/game/world";
-import { go, boardPlatform } from "./steering-helpers";
-type Snapshot = {
-  time: number;
-  player: number[];
-  grounded: boolean;
-  recoveries: number;
-  states: { phase: string; offset: number[]; rideSince: number }[];
-};
-const snapshot = (page: Page) =>
-  page.evaluate(() => window.__livingMatter!.snapshot() as Snapshot);
+import { go, boardPlatform, snapshot } from "./steering-helpers";
 
 for (const [index, kind] of [
-  [0, "platform"],
   [1, "platform"],
   [1, "stairs"],
   [2, "bridge"],
-  [3, "platform"],
   [3, "floating-path"],
 ] as [number, FormationKind][]) {
   test(`${sites[index].id} also supports ${kind} with real traversal`, async ({

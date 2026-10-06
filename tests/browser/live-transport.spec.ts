@@ -57,7 +57,7 @@ async function mockDecisions(page: Page) {
   return counts;
 }
 
-test("delayed mocked live decisions form a water route after recovery", async ({ page }, info) => {
+test("delayed mocked live decisions form a water route after recovery", async ({ page }) => {
   const counts = await mockDecisions(page);
   const warnings: string[] = [];
   page.on("pageerror", (e) => warnings.push(e.message));
@@ -71,32 +71,11 @@ test("delayed mocked live decisions form a water route after recovery", async ({
   await expect.poll(async () => (await snapshot()).recoveries).toBeGreaterThan(0);
   await expect.poll(async () => (await snapshot()).grounded).toBe(true);
   const recovered = (await snapshot()).recoveries;
-  try {
-    const frameTimes = await page.evaluate(async () => {
-      const gl = document.querySelector("canvas")?.getContext("webgl2");
-      const extension = gl?.getExtension("WEBGL_debug_renderer_info");
-      const renderer = extension ? gl?.getParameter(extension.UNMASKED_RENDERER_WEBGL) : gl?.getParameter(gl.RENDERER);
-      const samples: number[] = [];
-      await new Promise<void>((resolve) => {
-        let previous = 0;
-        const frame = (time: number) => {
-          if (previous) samples.push(time - previous);
-          previous = time;
-          if (samples.length < 180) requestAnimationFrame(frame); else resolve();
-        };
-        requestAnimationFrame(frame);
-      });
-      samples.sort((a, b) => a - b);
-      return { renderer, samples: samples.length, median_ms: samples[89], p95_ms: samples[170] };
-    });
-    console.log("Local walking frame times:", JSON.stringify(frameTimes));
-    await info.attach("frame-times", { body: JSON.stringify(frameTimes, null, 2), contentType: "application/json" });
-    await page.evaluate(start => window.__livingMatter!.teleport([start[0], start[1] + 1, start[2] + 6]), sites[3].start);
-    await go(page, [sites[3].start[0], sites[3].start[1], sites[3].start[2] + 1.2]);
-    await page.evaluate(yaw => window.__livingMatter!.look(yaw, 0),
-      Math.atan2(-(sites[3].end[0] - sites[3].start[0]), -(sites[3].end[2] - sites[3].start[2])));
-    await expect.poll(async () => (await snapshot()).states[3].phase).toBe("active");
-  } finally { await page.keyboard.up("w"); }
+  await page.evaluate(start => window.__livingMatter!.teleport([start[0], start[1] + 1, start[2] + 6]), sites[3].start);
+  await go(page, [sites[3].start[0], sites[3].start[1], sites[3].start[2] + 1.2]);
+  await page.evaluate(yaw => window.__livingMatter!.look(yaw, 0),
+    Math.atan2(-(sites[3].end[0] - sites[3].start[0]), -(sites[3].end[2] - sites[3].start[2])));
+  await expect.poll(async () => (await snapshot()).states[3].phase).toBe("active");
   expect(counts.waterOffers).toBeGreaterThanOrEqual(1);
   expect((await snapshot()).recoveries).toBe(recovered);
   expect(warnings).toEqual([]);

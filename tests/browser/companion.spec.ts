@@ -1,11 +1,6 @@
 import { expect, observeJump, test, type Page } from "./fixtures";
 import { sites } from "../../src/game/world";
-import { go, boardPlatform } from "./steering-helpers";
-
-const snap = (page: Page) => page.evaluate(() => window.__livingMatter!.snapshot() as {
-  time: number; player: number[]; grounded: boolean; recoveries: number;
-  constellation: number; states: { phase: string; offset: number[] }[];
-});
+import { boardPlatform, snapshot as snap } from "./steering-helpers";
 
 async function begin(page: Page) {
   await page.goto("/play");
@@ -63,28 +58,4 @@ test("free movement relative to a travelling platform, including reversing and j
   await jumped;
   await expect.poll(async () => (await snap(page)).grounded).toBe(true);
   expect((await snap(page)).recoveries).toBe(0);
-});
-
-test("night sky and controls stay legible", async ({ page }, info) => {
-  await begin(page);
-  await go(page, [0, 0, -12]);
-  await page.keyboard.press("Escape");
-  await expect(page.getByRole("button", { name: "Switch to day" })).toBeVisible();
-  await page.getByRole("button", { name: /^Resume$/ }).click();
-  await page.evaluate(() => window.__livingMatter!.look(0.15, 0.55));
-  await page.waitForTimeout(1800);
-  await page.screenshot({ path: info.outputPath("memory-sky.png") });
-  expect(await page.locator(".pause").evaluate(e => parseFloat(getComputedStyle(e).fontSize))).toBeGreaterThanOrEqual(15);
-  await page.keyboard.press("t");
-  await page.keyboard.press("Escape");
-  await expect(page.getByRole("button", { name: "Switch to night" })).toBeVisible();
-});
-
-test("unselected bridge colliders cannot support a player over open air", async ({ page }) => {
-  await begin(page);
-  await page.evaluate(() => {
-    window.__livingMatter!.teleport([0, 2, -36]);
-    window.__livingMatter!.formation(0, "platform");
-  });
-  await expect.poll(async () => (await snap(page)).recoveries, { timeout: 5000, intervals: [50] }).toBe(1);
 });

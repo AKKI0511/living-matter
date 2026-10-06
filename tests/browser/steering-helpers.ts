@@ -1,10 +1,11 @@
 import { expect, type Page } from "./fixtures";
 import { sites, islands, PLAYER_RADIUS, WEAVE_END_CAP, structureBoxes, platformOffset, PLATFORM_HALF_CYCLE_SECONDS } from "../../src/game/world";
+import type { Weave } from "../../src/game/weave";
+type Bank = Weave["banks"][number];
 
-type Bank = { from: number[]; to: number[]; version: number; crossSlope?: number };
 export const snapshot = (page: Page) => page.evaluate(() => window.__livingMatter!.snapshot() as {
   player: number[]; grounded: boolean; recoveries: number; phase: string; time: number; solidMatterColliders: number;
-  states: { phase: string; offset: number[] }[]; weave: { revision: number; route: number[][]; banks: Bank[] } | null;
+  states: { phase: string; offset: number[] }[]; weave: Weave | null;
 });
 
 export async function go(page: Page, target: number[], tolerance = 0.35, platformIndex?: number) {

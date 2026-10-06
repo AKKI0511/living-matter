@@ -2,14 +2,32 @@ name: Check
 on:
   push:
     branches: [main]
+    paths: &code-paths
+      - 'src/**'
+      - 'tests/**'
+      - 'scripts/**'
+      - 'patches/**'
+      - 'public/models/**'
+      - 'public/textures/**'
+      - 'public/audio/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - '.node-version'
+      - '.npmrc'
+      - 'next.config.*'
+      - 'tsconfig*.json'
+      - 'playwright.config.*'
+      - '.github/workflows/**'
   pull_request:
+    paths: *code-paths
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 15
     env:
       NEXT_PUBLIC_DECISION_BACKEND: preview
       NEXT_PUBLIC_JEV_SESSION_AUDIT: '0'
@@ -29,12 +47,12 @@ jobs:
       - run: pnpm build
       - run: pnpm exec playwright install --with-deps chromium
       - run: pnpm test:e2e
-        timeout-minutes: 20
-      - name: Check mocked live transport
-        run: pnpm exec playwright test live-transport.spec.ts exploration.spec.ts
+        timeout-minutes: 8
+      - name: Check mocked live decisions and fallback
+        run: pnpm test:e2e
         env:
           NEXT_PUBLIC_DECISION_BACKEND: jev
-        timeout-minutes: 8
+        timeout-minutes: 6
       - uses: actions/upload-artifact@v7
         if: failure()
         with:

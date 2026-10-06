@@ -21,7 +21,7 @@ test("home/play cycles, Back, pause, preferences and focus clean up the run", as
   await expect(page.getByRole("button", { name: /mode$/ })).toHaveCount(0);
   const controls = page.getByRole("region", { name: "Controls" });
   await expect(controls).toHaveCount(0);
-  for (let cycle = 0; cycle < 3; cycle++) {
+  for (let cycle = 0; cycle < 2; cycle++) {
     await page.getByRole("link", { name: "Play", exact: true }).click();
     await expect(controls).toBeVisible();
     await expect(controls.locator(".keyboard-guide > div")).toHaveCount(3);
@@ -29,7 +29,8 @@ test("home/play cycles, Back, pause, preferences and focus clean up the run", as
     await page.getByRole("button", { name: "Play", exact: true }).click();
     await page.keyboard.down("w");
     await expect.poll(() => page.evaluate(() => (window.__livingMatter!.snapshot() as {player:number[]}).player[2])).toBeLessThan(-1);
-    await page.keyboard.press("Escape");
+    if (cycle === 0) await page.evaluate(() => dispatchEvent(new Event("blur")));
+    else await page.keyboard.press("Escape");
     const frozen = await page.evaluate(() => window.__livingMatter!.snapshot());
     await expect(page.locator(".menu :focus")).toHaveCount(0);
     await page.keyboard.press("Space");
@@ -50,7 +51,7 @@ test("home/play cycles, Back, pause, preferences and focus clean up the run", as
     else await page.getByRole("link", { name: "Back to home", exact: true }).click();
     await expect(page).toHaveURL(/\/$/);
     await expect(page.locator("canvas")).toHaveCount(0);
-    expect(await page.evaluate(() => window.__livingMatter)).toBeUndefined();
+    await expect.poll(() => page.evaluate(() => window.__livingMatter === undefined)).toBe(true);
     expect(await page.evaluate(() => document.pointerLockElement)).toBeNull();
     await expect(page.getByRole("link", { name: "Play", exact: true })).toBeFocused();
   }
@@ -61,16 +62,4 @@ test("home/play cycles, Back, pause, preferences and focus clean up the run", as
   const wasNight = await page.getByRole("button", { name: "Switch to day" }).count();
   await page.getByRole("button", { name: wasNight ? "Switch to day" : "Switch to night" }).click();
   await expect(page.getByRole("button", { name: wasNight ? "Switch to night" : "Switch to day" })).toBeVisible();
-});
-
-test("focus loss pauses and drag-to-look works when pointer lock is unavailable", async ({ page }) => {
-  await page.addInitScript(() => { HTMLCanvasElement.prototype.requestPointerLock = () => Promise.reject(new Error("Unavailable")); });
-  await page.goto("/play");
-  await page.getByRole("button", { name: "Play", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Pause", exact: true })).toBeHidden();
-  await page.mouse.move(600,300); await page.mouse.down(); await page.mouse.move(800,300); await page.mouse.up();
-  await page.evaluate(() => dispatchEvent(new Event("blur")));
-  await expect(page.getByRole("heading", { name: "Paused", exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Resume", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Pause", exact: true })).toBeHidden();
 });

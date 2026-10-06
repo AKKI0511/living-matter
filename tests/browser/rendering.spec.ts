@@ -2,6 +2,27 @@ import { expect, test } from "./fixtures";
 import { go } from "./steering-helpers";
 import { sites } from "../../src/game/world";
 
+test("restarts release scene resources", async ({ page }) => {
+  test.skip(!!process.env.CI, "GPU resource checks run on local hardware");
+  await page.goto("/play");
+  await page.getByLabel("Graphics", { exact: true }).selectOption("high");
+  await page.getByRole("button", { name: "Play", exact: true }).click();
+  const warmed = () => page.waitForFunction(() =>
+    (window.__livingMatter!.snapshot() as { time: number }).time > .8);
+  await warmed();
+  const baseline = await page.evaluate(() => window.__livingMatter!.renderInfo());
+  for (let cycle = 0; cycle < 3; cycle++) {
+    await page.keyboard.press("Escape");
+    await page.getByRole("button", { name: "Restart", exact: true }).click();
+    await expect.poll(() => page.evaluate(() =>
+      (window.__livingMatter!.snapshot() as { time: number }).time)).toBeLessThan(.5);
+    await warmed();
+  }
+  const final = await page.evaluate(() => window.__livingMatter!.renderInfo());
+  expect(final.geometries).toBeLessThanOrEqual(baseline.geometries + 2);
+  expect(final.textures).toBeLessThanOrEqual(baseline.textures + 2);
+});
+
 test("High keeps linear intermediate color and follows DPR changes at fixed CSS size", async ({ page }) => {
   test.skip(!!process.env.CI, "DPR and GPU resource checks run on local hardware");
   await page.goto("/play");
