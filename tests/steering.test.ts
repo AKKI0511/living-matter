@@ -106,6 +106,33 @@ test("the player can step across a shore seam smaller than their capsule radius"
   }
 });
 
+test("an elevated deck releases walking onto the ground below without releasing an open-water edge", () => {
+  const weave = createWeave([[-14, 0.825, -41], [-14, 0.825, -47], [-14, 0.825, -53]], 0);
+  weave.banks[1].since = 5;
+  const movement: Vec3 = [0, -0.01, -0.1];
+  assert.deepEqual(guardWeaveEdge(weave, [-14, 1.71, -46.6], movement, 5), movement);
+  const overWater = createWeave([[0, 0.825, -25], [0, 0.825, -31], [0, 0.825, -37]], 0);
+  overWater.banks[1].since = 5;
+  assert.notDeepEqual(guardWeaveEdge(overWater, [0, 1.71, -30.6], movement, 5), movement);
+  const high = createWeave([[-14, 3, -41], [-14, 3, -47], [-14, 3, -53]], 0);
+  high.banks[1].since = 5;
+  assert.notDeepEqual(guardWeaveEdge(high, [-14, 3.885, -46.6], movement, 5), movement);
+});
+
+test("the bounded steering menu retains a return landing at the shore's height", () => {
+  const weave = createWeave([[-1.8, 0.45, -27.5], [-3.5, 1.2, -30], [-7, 1.2, -35]], 0);
+  weave.banks[1] = { ...weave.banks[1], from: [-4.1, 0.825, -27.7], to: [-9, 0.825, -24.3], crossSlope: 0.25 };
+  const p: Vec3 = [-2.6, 1.3, -26.7];
+  const options = weaveCandidates(weave, sites[0], p, 5, [2.6, 0, 3.7])!;
+  assert.ok(options.candidates.length <= 16);
+  const landing = options.candidates.find(c => c.attachment === "near end" && c.physical!.landing && c.physical!.to[2] > -25);
+  assert.ok(landing);
+  assert.equal(landing.physical!.to[1], 0);
+  const occupied = weave.banks[0];
+  applySteeringCandidate(weave, options.bank, landing, 5);
+  assert.equal(weave.banks[0], occupied);
+});
+
 test("an existing level route serves the same route but cannot veto a climb, descent or turn",()=>{
   const route: [number,number,number][]=[[0,0,-25],[0,0,-31],[0,0,-37]],weave=createWeave(route,0);
   const candidate={id:"route",siteId:"reach",kind:"weave" as const,route,

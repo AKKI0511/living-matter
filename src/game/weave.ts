@@ -150,9 +150,10 @@ export function weaveCandidates(
   return { bank: free, segment: missing, candidates };
 }
 
-function groundAt(p: Vec3, clearance = 0.4) {
+function groundAt(p: Vec3, clearance = 0.4, maxDrop = 0.32) {
   return islands.some(b => Math.abs(p[0] - b.position[0]) <= b.size[0] / 2 - clearance &&
-    Math.abs(p[2] - b.position[2]) <= b.size[2] / 2 - clearance && Math.abs(p[1] - b.position[1] - b.size[1] / 2) < 0.32);
+    Math.abs(p[2] - b.position[2]) <= b.size[2] / 2 - clearance &&
+    p[1] - b.position[1] - b.size[1] / 2 > -0.32 && p[1] - b.position[1] - b.size[1] / 2 < maxDrop);
 }
 
 /** Both joints and the side of the occupied section can seed a bounded new heading. */
@@ -271,7 +272,9 @@ function steeringCandidates(weave: Weave, site: Site, occupied: number, p: Vec3,
   const preferred = forward ? "far end" : "near end", other = forward ? "near end" : "far end";
   const balanced = [
     ...candidates.filter(c => c.attachment === "middle"),
-    ...candidates.filter(c => c.attachment === preferred).slice(0, 9),
+    // Keep a reachable shore connection when the generic turns fill the menu.
+    ...candidates.filter(c => c.attachment === preferred)
+      .sort((a, b) => Number(!!b.physical?.landing) - Number(!!a.physical?.landing)).slice(0, 9),
     ...candidates.filter(c => c.attachment === other),
   ].slice(0,16);
   return balanced.length ? { bank: free, segment: bank.segment + 1, candidates: balanced } : null;
@@ -353,7 +356,8 @@ export function guardWeaveEdge(
     if (
       (direction > 0 ? next.t < 0.92 : next.t > 0.08) ||
       groundAt(joint, -(PLAYER_RADIUS + WEAVE_END_CAP)) ||
-      groundAt([p[0] + movement[0], p[1] - 0.825, p[2] + movement[2]]) ||
+      // A small step down onto permanent ground needs no additional section.
+      groundAt([p[0] + movement[0], p[1] - 0.825, p[2] + movement[2]], 0.4, 1.2) ||
       weave.banks.some((b) => b !== bank && time - b.since >= WEAVE_SECONDS &&
         (bankProgress(b, jointFeet).supported || bankProgress(b, [p[0] + movement[0], p[1], p[2] + movement[2]]).supported))
     )

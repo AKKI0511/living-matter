@@ -8,19 +8,23 @@ export const snapshot = (page: Page) => page.evaluate(() => window.__livingMatte
 });
 
 export async function go(page: Page, target: number[], tolerance = 0.35, platformIndex?: number) {
+  const steer = ({ target, tolerance, platformIndex }: { target: number[]; tolerance: number; platformIndex?: number }) => {
+    const state = window.__livingMatter!.snapshot() as {
+      phase: string; player: number[]; states: { offset: number[] }[];
+    };
+    const offset = platformIndex === undefined ? [0, 0, 0] : state.states[platformIndex].offset;
+    const dx = target[0] + offset[0] - state.player[0], dz = target[2] + offset[2] - state.player[2];
+    if (state.phase === "complete" || Math.hypot(dx, dz) < tolerance) return true;
+    window.__livingMatter!.look(Math.atan2(-dx, -dz), 0);
+    return false;
+  };
+  const destination = { target, tolerance, platformIndex };
+  // Face the destination before walking; slow protocol delivery must not
+  // briefly ask matter to extend in the previous direction.
+  if (await page.evaluate(steer, destination)) return;
   await page.keyboard.down("w");
   try {
-    // Steer in the browser's frame, rather than chasing stale protocol snapshots.
-    await page.waitForFunction(({ target, tolerance, platformIndex }) => {
-      const state = window.__livingMatter!.snapshot() as {
-        phase: string; player: number[]; states: { offset: number[] }[];
-      };
-      const offset = platformIndex === undefined ? [0, 0, 0] : state.states[platformIndex].offset;
-      const dx = target[0] + offset[0] - state.player[0], dz = target[2] + offset[2] - state.player[2];
-      if (state.phase === "complete" || Math.hypot(dx, dz) < tolerance) return true;
-      window.__livingMatter!.look(Math.atan2(-dx, -dz), 0);
-      return false;
-    }, { target, tolerance, platformIndex }, { polling: "raf", timeout: 20_000 });
+    await page.waitForFunction(steer, destination, { polling: "raf", timeout: 20_000 });
   } finally { await page.keyboard.up("w"); }
 }
 
