@@ -4,7 +4,7 @@ Explore a flooded observatory with matter that builds paths from your movement, 
 
 [Play](https://livingmatter.vercel.app) · [How Jev works](docs/jev.md) · [Development](docs/development.md)
 
-![Living matter forming a path through the observatory at night](public/images/living-matter-arrival-night.webp)
+https://github.com/user-attachments/assets/2f66d307-295c-4a50-9aff-1a3bc3cab328
 
 One body of 512 pieces becomes walking paths, climbs, descents, side exits and moving decks. Reach the circular monument or explore along the way. The surface beneath you stays in place while unused matter reshapes.
 
@@ -31,6 +31,14 @@ git clone https://github.com/AKKI0511/living-matter.git
 cd living-matter
 pnpm install
 pnpm dev
+```
+
+For live Jev, copy [.env.example](.env.example) to `.env.local`, get a key from [TypeSafe](https://typesafe.ai), and set:
+
+```dotenv
+NEXT_PUBLIC_DECISION_BACKEND=jev
+TYPESAFE_API_KEY=your_server_side_key
+TYPESAFE_DEFAULT_MODEL=jev-1.13.0
 ```
 
 Open [localhost:3000](http://localhost:3000). Preview works without credentials. See [development](docs/development.md) for live Jev and testing, or [deployment](docs/deployment.md) to host your own instance.

@@ -18,19 +18,26 @@ test("small glances keep the next half usable through the first handoff", async 
   await page.waitForFunction(time => (window.__livingMatter!.snapshot() as { time: number }).time > time + .65, time);
   expect((await snapshot(page)).weave!.banks).toEqual(initial.banks);
   const target = next.from.map((v, i) => v * .3 + next.to[i] * .7);
+  const walked = page.waitForFunction(({ target, next }) => {
+    const state = window.__livingMatter!.snapshot() as {
+      player: number[]; recoveries: number; weave: { banks: unknown[] };
+    };
+    const p = state.player;
+    if (state.recoveries !== 0) throw new Error("The handoff recovered the player");
+    if (JSON.stringify(state.weave.banks[1]) !== JSON.stringify(next))
+      throw new Error("The approaching half changed during the handoff");
+    if (Math.hypot(p[0] - target[0], p[2] - target[2]) < .65) return true;
+    // Steer and inspect the same frame so slow protocol samples cannot turn
+    // a small glance into an unintended reversal after passing the target.
+    window.__livingMatter!.look(
+      Math.atan2(-(target[0] - p[0]), -(target[2] - p[2])) + Math.sin(p[2] * 3) * .06,
+      Math.sin(p[2]) * .26,
+    );
+    return false;
+  }, { target, next }, { polling: "raf", timeout: 25_000 });
   await page.keyboard.down("w");
   try {
-    await expect.poll(async () => {
-      const state = await snapshot(page), p = state.player;
-      // Keep walking, with small left/right glances and larger up/down glances.
-      await page.evaluate(({ yaw, pitch }) => window.__livingMatter!.look(yaw, pitch), {
-        yaw: Math.atan2(-(target[0] - p[0]), -(target[2] - p[2])) + Math.sin(p[2] * 3) * .06,
-        pitch: Math.sin(p[2]) * .26,
-      });
-      expect(state.recoveries).toBe(0);
-      expect(state.weave!.banks[1]).toEqual(next);
-      return Math.hypot(p[0] - target[0], p[2] - target[2]);
-    }, { timeout: 25_000, intervals: [80] }).toBeLessThan(.65);
+    await walked;
   } finally { await page.keyboard.up("w"); }
   expect((await snapshot(page)).grounded).toBe(true);
 });
