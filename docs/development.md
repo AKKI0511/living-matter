@@ -32,6 +32,8 @@ pnpm test:e2e
 
 The browser suite starts or reuses a development server on port 3000. Provider transport is mocked. Local tests use Chrome; enable hardware acceleration for graphics measurements.
 
+CI runs a smaller browser integration suite in Preview and mocked live mode. Graphics and frame-time checks stay local. The workflow runs for source, tests, game assets, dependency/configuration and workflow changes; README, docs, posters and demo-media changes alone skip it.
+
 For the production traversal check, build with `NEXT_PUBLIC_DECISION_BACKEND=preview`, run `pnpm start`, and set `PLAYTEST_URL` to that server. Then run:
 
 ```sh
