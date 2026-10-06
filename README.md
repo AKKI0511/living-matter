@@ -4,7 +4,7 @@ Explore a flooded observatory with matter that builds paths from your movement, 
 
 [Play](https://livingmatter.vercel.app) · [How Jev works](docs/jev.md) · [Development](docs/development.md)
 
-https://github.com/user-attachments/assets/2f66d307-295c-4a50-9aff-1a3bc3cab328
+![Living Matter gameplay](public/images/living-matter-demo.gif)
 
 One body of 512 pieces becomes walking paths, climbs, descents, side exits and moving decks. Reach the circular monument or explore along the way. The surface beneath you stays in place while unused matter reshapes.
 
